@@ -131,7 +131,8 @@ function hostGame() {
         role: null,
         eliminated: false,
         voted: false,
-        isHost: true
+        isHost: true,
+        connectionId: null // Host doesn't have a connection to themselves
     }];
     
     initializePeer(gameState.gameCode);
@@ -278,7 +279,8 @@ function handleMessage(data, conn) {
                     role: null,
                     eliminated: false,
                     voted: false,
-                    isHost: false
+                    isHost: false,
+                    connectionId: conn.peer // Store the connection ID
                 };
                 
                 gameState.players.push(newPlayer);
@@ -307,7 +309,18 @@ function handleMessage(data, conn) {
             gameState.players = data.state.players;
             gameState.numTraitors = data.state.numTraitors;
             gameState.phase = data.state.phase;
-            updateWaitingPlayers();
+            
+            // Sync to correct screen based on phase
+            if (gameState.phase === 'lobby') {
+                updateWaitingPlayers();
+            } else if (gameState.phase === 'playing') {
+                // Already in game, sync state
+                const me = gameState.players.find(p => p.id === gameState.playerId);
+                if (me && me.role) {
+                    gameState.role = me.role;
+                }
+            }
+            
             saveGameState();
             break;
             
@@ -340,8 +353,16 @@ function handleMessage(data, conn) {
             
         case 'playerRemoved':
             gameState.players = data.players;
-            updateWaitingPlayers();
+            
+            if (gameState.phase === 'lobby') {
+                updateWaitingPlayers();
+            }
+            
             saveGameState();
+            
+            if (data.playerName) {
+                showNotification(`${data.playerName} left the game`, 'error');
+            }
             break;
             
         case 'gameStart':
@@ -425,6 +446,17 @@ function handleMessage(data, conn) {
             checkGameOver();
             break;
             
+        case 'deliberationCancelled':
+            gameState.phase = 'playing';
+            gameState.votes = {};
+            gameState.players.forEach(p => p.voted = false);
+            
+            saveGameState();
+            showNotification('Deliberation cancelled by host', 'error');
+            showScreen('gameScreen');
+            updateGameScreen();
+            break;
+            
         case 'playerMurdered':
             const murdered = gameState.players.find(p => p.id === data.playerId);
             if (murdered) {
@@ -454,6 +486,62 @@ function handleMessage(data, conn) {
             
             saveGameState();
             showGameOver(data.winner);
+            break;
+            
+        case 'gameCancelled':
+            showNotification('Host cancelled the game', 'error');
+            resetGame();
+            showScreen('welcomeScreen');
+            break;
+            
+        case 'requestStateSync':
+            // Host responds with current game state
+            if (gameState.isHost) {
+                conn.send({
+                    type: 'stateSync',
+                    state: {
+                        players: gameState.players,
+                        phase: gameState.phase,
+                        numTraitors: gameState.numTraitors,
+                        votes: gameState.votes,
+                        murderVotes: gameState.murderVotes,
+                        murderEnabled: gameState.murderEnabled
+                    }
+                });
+            }
+            break;
+            
+        case 'stateSync':
+            // Receive state sync from host
+            gameState.players = data.state.players;
+            gameState.phase = data.state.phase;
+            gameState.numTraitors = data.state.numTraitors;
+            gameState.votes = data.state.votes || {};
+            gameState.murderVotes = data.state.murderVotes || {};
+            gameState.murderEnabled = data.state.murderEnabled || false;
+            
+            // Find my role
+            const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+            if (myPlayer && myPlayer.role) {
+                gameState.role = myPlayer.role;
+            }
+            
+            saveGameState();
+            
+            // Navigate to correct screen based on phase
+            if (gameState.phase === 'lobby') {
+                showScreen('waitingRoomScreen');
+                updateWaitingPlayers();
+            } else if (gameState.phase === 'deliberation') {
+                showDeliberationScreen();
+            } else if (gameState.phase === 'playing') {
+                showScreen('gameScreen');
+                updateGameScreen();
+            } else if (gameState.phase === 'gameOver') {
+                // Request full game over data
+            }
+            
+            showNotification('Synced with game state', 'success');
             break;
     }
 }
@@ -712,6 +800,14 @@ function cancelDeliberation() {
     gameState.players.forEach(p => p.voted = false);
     
     saveGameState();
+    
+    // Notify all players that deliberation was cancelled
+    if (gameState.isHost) {
+        broadcastToAll({
+            type: 'deliberationCancelled'
+        });
+    }
+    
     showScreen('gameScreen');
     updateGameScreen();
 }
@@ -978,15 +1074,37 @@ function broadcastToAll(message) {
 }
 
 function handlePlayerDisconnect(peerId) {
-    const player = gameState.players.find(p => p.id === peerId);
+    // Find player by connection ID
+    const player = gameState.players.find(p => p.connectionId === peerId);
+    
     if (player) {
-        showNotification(`${player.name} disconnected`, 'error');
+        console.log('Player disconnected:', player.name);
+        
+        if (gameState.isHost) {
+            // Remove player from list
+            gameState.players = gameState.players.filter(p => p.connectionId !== peerId);
+            
+            // Update UI based on current phase
+            if (gameState.phase === 'lobby') {
+                updateLobbyPlayers();
+            }
+            
+            // Broadcast to all other players
+            broadcastToAll({
+                type: 'playerRemoved',
+                playerId: player.id,
+                playerName: player.name,
+                players: gameState.players
+            });
+            
+            saveGameState();
+            showNotification(`${player.name} disconnected`, 'error');
+        }
     }
     
     // If host disconnected and we're next, become host
     if (player && player.isHost && !gameState.isHost && gameState.players.length > 1) {
         gameState.isHost = true;
-        player.isHost = false;
         
         const me = gameState.players.find(p => p.id === gameState.playerId);
         if (me) me.isHost = true;
@@ -1019,6 +1137,13 @@ function reconnectToGame() {
 }
 
 function cancelHosting() {
+    // Notify all players that game is cancelled
+    if (gameState.isHost && gameState.players.length > 1) {
+        broadcastToAll({
+            type: 'gameCancelled'
+        });
+    }
+    
     resetGame();
     showScreen('nameScreen');
 }
