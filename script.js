@@ -150,13 +150,18 @@ function joinGame(code) {
     
     showLoading(true);
     
-    initializePeer(generateId(), () => {
-        // Connect to host
-        const hostId = code;
-        const conn = peer.connect(hostId);
+    // Generate unique ID for this player
+    const myPeerId = generateId();
+    
+    initializePeer(myPeerId, () => {
+        // Connect to host using the game code as the host's peer ID
+        console.log('Attempting to connect to host:', code);
+        
+        const conn = peer.connect(code);
         
         conn.on('open', () => {
-            connections[hostId] = conn;
+            console.log('Connected to host!');
+            connections[code] = conn;
             
             // Send join request
             conn.send({
@@ -173,10 +178,25 @@ function joinGame(code) {
         conn.on('data', (data) => handleMessage(data, conn));
         
         conn.on('error', (err) => {
+            console.error('Connection error:', err);
             showLoading(false);
             showNotification('Failed to join game. Check the code and try again.', 'error');
             showScreen('joinGameScreen');
         });
+        
+        conn.on('close', () => {
+            console.log('Connection to host closed');
+            delete connections[code];
+        });
+        
+        // Add timeout for connection
+        setTimeout(() => {
+            if (!connections[code]) {
+                showLoading(false);
+                showNotification('Connection timeout. Host may not be available.', 'error');
+                showScreen('joinGameScreen');
+            }
+        }, 10000); // 10 second timeout
     });
 }
 
@@ -185,34 +205,63 @@ function initializePeer(id, callback) {
         peer.destroy();
     }
     
+    console.log('Initializing peer with ID:', id);
+    
     peer = new Peer(id, {
         config: {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' }
             ]
-        }
+        },
+        debug: 2 // Enable debug logging
     });
     
     peer.on('open', (peerId) => {
-        console.log('Peer initialized:', peerId);
+        console.log('Peer connection opened. My ID:', peerId);
         if (callback) callback();
     });
     
     peer.on('connection', (conn) => {
+        console.log('Incoming connection from:', conn.peer);
         connections[conn.peer] = conn;
         
         conn.on('data', (data) => handleMessage(data, conn));
         
         conn.on('close', () => {
+            console.log('Connection closed:', conn.peer);
             delete connections[conn.peer];
             handlePlayerDisconnect(conn.peer);
+        });
+        
+        conn.on('error', (err) => {
+            console.error('Connection error with peer:', conn.peer, err);
         });
     });
     
     peer.on('error', (err) => {
         console.error('Peer error:', err);
-        showNotification('Connection error. Please try again.', 'error');
+        
+        // More specific error messages
+        if (err.type === 'peer-unavailable') {
+            showNotification('Host not found. Check the game code.', 'error');
+        } else if (err.type === 'network') {
+            showNotification('Network error. Check your connection.', 'error');
+        } else if (err.type === 'server-error') {
+            showNotification('PeerJS server error. Please try again.', 'error');
+        } else {
+            showNotification('Connection error. Please try again.', 'error');
+        }
+        
+        showLoading(false);
+    });
+    
+    peer.on('disconnected', () => {
+        console.log('Peer disconnected from signaling server');
+        // Attempt to reconnect
+        if (!peer.destroyed) {
+            peer.reconnect();
+        }
     });
 }
 
