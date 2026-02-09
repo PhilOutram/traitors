@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPY BOT - Traitors Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Intro Screen -->
+    <div id="introScreen" class="screen active">
+        <div class="intro-content">
+            <img src="assets/SpyBotLogo.png" alt="Spy Bot Logo" class="logo">
+            <h1>SPY BOT</h1>
+            <p class="tagline">Who can you trust?</p>
+            <button id="btnPlay" class="btn-play">
+                <img src="assets/BtnPlay.png" alt="Play">
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Menu Screen -->
+    <div id="menuScreen" class="screen">
+        <div class="menu-content">
+            <img src="assets/SpyBotLogo.png" alt="Spy Bot Logo" class="logo-small">
+            <h2>MAIN MENU</h2>
+            <div class="menu-buttons">
+                <button id="btnCreate" class="menu-btn">
+                    <img src="assets/btnCreate.png" alt="Create Game">
+                </button>
+                <button id="btnJoin" class="menu-btn">
+                    <img src="assets/btnJoin.png" alt="Join Game">
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup Screen -->
+    <div id="setupScreen" class="screen">
+        <div class="setup-content">
+            <h2>GAME SETUP</h2>
+            <div class="setup-options">
+                <label for="numPlayers">Number of Players:</label>
+                <select id="numPlayers">
+                    <option value="3">3 Players</option>
+                    <option value="4">4 Players</option>
+                    <option value="5" selected>5 Players</option>
+                </select>
+                
+                <label for="numTraitors">Number of Traitors:</label>
+                <select id="numTraitors">
+                    <option value="1" selected>1 Traitor</option>
+                    <option value="2">2 Traitors</option>
+                </select>
+            </div>
+            <button id="btnStart" class="action-btn">
+                <img src="assets/btnStart.png" alt="Start Game">
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="gameScreen" class="screen">
+        <div class="game-content">
+            <h2>REVEAL YOUR ROLE</h2>
+            <div id="playerReveal" class="player-reveal">
+                <div class="reveal-info">
+                    <p>Pass the device around...</p>
+                    <p class="current-player">Player <span id="currentPlayerNum">1</span></p>
+                    <button id="btnReveal" class="reveal-btn">TAP TO REVEAL</button>
+                </div>
+                
+                <div id="roleReveal" class="role-reveal hidden">
+                    <div class="role-card">
+                        <img id="roleImage" src="" alt="Role">
+                        <h3 id="roleTitle"></h3>
+                        <p id="roleDescription"></p>
+                    </div>
+                    <button id="btnNextPlayer" class="next-btn">NEXT PLAYER</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Game Screen -->
+    <div id="activeGameScreen" class="screen">
+        <div class="active-game-content">
+            <h2>GAME IN PROGRESS</h2>
+            
+            <div class="player-grid">
+                <div class="player-slot" data-player="1">
+                    <img class="player-icon off" src="assets/1_GRN_OFF.png" alt="Player 1">
+                    <img class="player-icon on hidden" src="assets/1_RED_OFF.png" alt="Player 1">
+                    <div class="player-status">Player 1</div>
+                </div>
+                <div class="player-slot" data-player="2">
+                    <img class="player-icon off" src="assets/2_GRN_OFF.png" alt="Player 2">
+                    <img class="player-icon on hidden" src="assets/2_RED_OFF.png" alt="Player 2">
+                    <div class="player-status">Player 2</div>
+                </div>
+                <div class="player-slot" data-player="3">
+                    <img class="player-icon off" src="assets/3_GRN_OFF.png" alt="Player 3">
+                    <img class="player-icon on hidden" src="assets/3_RED_OFF.png" alt="Player 3">
+                    <div class="player-status">Player 3</div>
+                </div>
+                <div class="player-slot" data-player="4">
+                    <img class="player-icon off" src="assets/4_GRN_OFF.png" alt="Player 4">
+                    <img class="player-icon on hidden" src="assets/4_RED_OFF.png" alt="Player 4">
+                    <div class="player-status">Player 4</div>
+                </div>
+                <div class="player-slot" data-player="5">
+                    <img class="player-icon off" src="assets/5_GRN_OFF.png" alt="Player 5">
+                    <img class="player-icon on hidden" src="assets/5_RED_OFF.png" alt="Player 5">
+                    <div class="player-status">Player 5</div>
+                </div>
+            </div>
+
+            <div class="game-actions">
+                <button id="btnTeamMeeting" class="action-btn">
+                    <img src="assets/btnTeamMeeting.png" alt="Team Meeting">
+                </button>
+                <button id="btnExposed" class="action-btn">
+                    <img src="assets/btnExposed.png" alt="Exposed">
+                </button>
+                <button id="btnReset" class="action-btn">
+                    <img src="assets/btnReset.png" alt="Reset Game">
+                </button>
+            </div>
+
+            <div class="game-info">
+                <p>Agents: <span id="agentCount">0</span></p>
+                <p>Traitors: <span id="traitorCount">0</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameOverScreen" class="screen">
+        <div class="game-over-content">
+            <h2 id="winnerTitle">GAME OVER</h2>
+            <div id="winnerMessage"></div>
+            <div id="finalRoles"></div>
+            <button id="btnPlayAgain" class="action-btn">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="bgMusic" loop>
+        <source src="assets/Darkambientmusic.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="clickSound">
+        <source src="assets/Click.wav" type="audio/wav">
+    </audio>
+    <audio id="beepSound">
+        <source src="assets/Beep.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="sirenSound">
+        <source src="assets/Siren_Noise-KevanGC-1337458893.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="explosionSound">
+        <source src="assets/Explosion_Ultra_Bass-Mark_DiAngelo-1810420658.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
