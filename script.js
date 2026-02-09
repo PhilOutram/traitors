@@ -318,6 +318,32 @@ function handleMessage(data, conn) {
             showNotification(`${data.player.name} joined the game`, 'success');
             break;
             
+        case 'playerLeft':
+            // Remove player from list
+            gameState.players = gameState.players.filter(p => p.id !== data.playerId);
+            
+            if (gameState.isHost) {
+                updateLobbyPlayers();
+                // Broadcast updated player list to everyone
+                broadcastToAll({
+                    type: 'playerRemoved',
+                    playerId: data.playerId,
+                    players: gameState.players
+                });
+            } else {
+                updateWaitingPlayers();
+            }
+            
+            saveGameState();
+            showNotification(`${data.playerName} left the game`, 'error');
+            break;
+            
+        case 'playerRemoved':
+            gameState.players = data.players;
+            updateWaitingPlayers();
+            saveGameState();
+            break;
+            
         case 'gameStart':
             gameState.players = data.players;
             gameState.phase = 'playing';
@@ -873,7 +899,15 @@ function updateLobbyPlayers() {
     
     // Enable start button if enough players
     const startBtn = document.getElementById('btnStartGame');
-    startBtn.disabled = gameState.players.length < 3;
+    const helpText = document.getElementById('startButtonHelp');
+    
+    if (gameState.players.length < 3) {
+        startBtn.disabled = true;
+        helpText.textContent = `Need at least 3 players to start (currently ${gameState.players.length})`;
+    } else {
+        startBtn.disabled = false;
+        helpText.textContent = '';
+    }
 }
 
 function updateWaitingPlayers() {
@@ -990,6 +1024,15 @@ function cancelHosting() {
 }
 
 function leaveGame() {
+    // Notify host that we're leaving
+    if (!gameState.isHost && connections[gameState.gameCode]) {
+        connections[gameState.gameCode].send({
+            type: 'playerLeft',
+            playerId: gameState.playerId,
+            playerName: gameState.playerName
+        });
+    }
+    
     resetGame();
     showScreen('welcomeScreen');
 }

@@ -646,6 +646,18 @@ h3 {
     font-weight: 700;
 }
 
+/* Version Number */
+.version-number {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.2);
+    font-family: monospace;
+    z-index: 1000;
+    pointer-events: none;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     h1 {
