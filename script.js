@@ -1,336 +1,1051 @@
 // Game State
 const gameState = {
-    numPlayers: 5,
+    playerName: '',
+    playerId: '',
+    gameCode: '',
+    isHost: false,
+    role: null, // 'agent' or 'traitor'
+    players: [], // Array of {id, name, role, eliminated, voted}
     numTraitors: 1,
-    players: [],
-    currentRevealIndex: 0,
-    musicEnabled: true,
-    soundEnabled: true
+    phase: 'lobby', // lobby, playing, deliberation, murder, gameOver
+    votes: {}, // playerId: targetPlayerId
+    murderVotes: {}, // playerId: targetPlayerId
+    murderEnabled: false,
+    deliberationStartTime: null
 };
 
-// Audio Elements
-let bgMusic, clickSound, beepSound, sirenSound, explosionSound;
+// Networking
+let peer = null;
+let connections = {};
+let isConnecting = false;
 
-// Initialize game
+// Audio
+let bgMusic;
+let musicTimeout = null;
+
+// Initialize
 document.addEventListener('DOMContentLoaded', function() {
-    // Get audio elements
     bgMusic = document.getElementById('bgMusic');
-    clickSound = document.getElementById('clickSound');
-    beepSound = document.getElementById('beepSound');
-    sirenSound = document.getElementById('sirenSound');
-    explosionSound = document.getElementById('explosionSound');
-
-    // Set volume levels
-    bgMusic.volume = 0.3;
-    clickSound.volume = 0.5;
-    beepSound.volume = 0.6;
-    sirenSound.volume = 0.4;
-    explosionSound.volume = 0.5;
-
-    // Add event listeners
-    setupEventListeners();
+    bgMusic.volume = 0.2;
     
-    // Show intro screen
-    showScreen('introScreen');
+    setupEventListeners();
+    loadGameState();
+    
+    // Show welcome screen or restore game
+    if (gameState.gameCode && gameState.players.length > 0) {
+        showNotification('Reconnecting to game...', 'success');
+        reconnectToGame();
+    } else {
+        showScreen('welcomeScreen');
+    }
 });
 
 function setupEventListeners() {
-    // Intro screen
-    document.getElementById('btnPlay').addEventListener('click', function() {
-        playSound(clickSound);
-        playMusic();
-        showScreen('menuScreen');
+    // Welcome screen
+    document.getElementById('btnPlay').addEventListener('click', () => {
+        showScreen('nameScreen');
     });
 
-    // Menu screen
-    document.getElementById('btnCreate').addEventListener('click', function() {
-        playSound(clickSound);
-        showScreen('setupScreen');
-    });
-
-    document.getElementById('btnJoin').addEventListener('click', function() {
-        playSound(beepSound);
-        alert('Join Game feature - Enter game code to join!');
-    });
-
-    // Setup screen
-    document.getElementById('btnStart').addEventListener('click', function() {
-        playSound(clickSound);
-        startGame();
-    });
-
-    // Game screen - Role reveal
-    document.getElementById('btnReveal').addEventListener('click', function() {
-        playSound(beepSound);
-        revealRole();
-    });
-
-    document.getElementById('btnNextPlayer').addEventListener('click', function() {
-        playSound(clickSound);
-        nextPlayer();
-    });
-
-    // Active game screen
-    document.getElementById('btnTeamMeeting').addEventListener('click', function() {
-        playSound(sirenSound);
-        teamMeeting();
-    });
-
-    document.getElementById('btnExposed').addEventListener('click', function() {
-        playSound(clickSound);
-        exposeTraitor();
-    });
-
-    document.getElementById('btnReset').addEventListener('click', function() {
-        playSound(clickSound);
-        if (confirm('Are you sure you want to reset the game?')) {
-            resetGame();
+    // Name entry
+    document.getElementById('btnHostGame').addEventListener('click', () => {
+        const name = document.getElementById('playerName').value.trim();
+        if (name) {
+            gameState.playerName = name;
+            gameState.playerId = generateId();
+            hostGame();
+        } else {
+            showNotification('Please enter your name', 'error');
         }
     });
 
-    // Game over screen
-    document.getElementById('btnPlayAgain').addEventListener('click', function() {
-        playSound(clickSound);
-        showScreen('setupScreen');
+    document.getElementById('btnJoinGame').addEventListener('click', () => {
+        const name = document.getElementById('playerName').value.trim();
+        if (name) {
+            gameState.playerName = name;
+            gameState.playerId = generateId();
+            showScreen('joinGameScreen');
+        } else {
+            showNotification('Please enter your name', 'error');
+        }
     });
 
-    // Player slot clicks
-    const playerSlots = document.querySelectorAll('.player-slot');
-    playerSlots.forEach(slot => {
-        slot.addEventListener('click', function() {
-            if (!this.classList.contains('eliminated')) {
-                playSound(clickSound);
-                togglePlayerElimination(this);
-            }
-        });
+    // Join game
+    document.getElementById('btnConfirmJoin').addEventListener('click', () => {
+        const code = document.getElementById('gameCodeInput').value.trim().toUpperCase();
+        if (code.length === 4) {
+            joinGame(code);
+        } else {
+            showNotification('Please enter a 4-digit game code', 'error');
+        }
+    });
+
+    document.getElementById('btnCancelJoin').addEventListener('click', () => {
+        showScreen('nameScreen');
+    });
+
+    // Host setup
+    document.getElementById('btnStartGame').addEventListener('click', startGameAsHost);
+    document.getElementById('btnCancelHost').addEventListener('click', cancelHosting);
+
+    // Waiting room
+    document.getElementById('btnLeaveGame').addEventListener('click', leaveGame);
+
+    // Role reveal
+    document.getElementById('btnAcknowledgeRole').addEventListener('click', () => {
+        showScreen('gameScreen');
+        updateGameScreen();
+    });
+
+    // Game actions
+    document.getElementById('btnCallDeliberation').addEventListener('click', callDeliberation);
+    document.getElementById('btnRevealMurder').addEventListener('click', revealMurder);
+    document.getElementById('btnMurderVote').addEventListener('click', () => {
+        showScreen('murderVoteScreen');
+        updateMurderVoteScreen();
+    });
+
+    // Deliberation
+    document.getElementById('btnEliminatePlayer').addEventListener('click', eliminatePlayer);
+    document.getElementById('btnCancelDeliberation').addEventListener('click', cancelDeliberation);
+
+    // Game over
+    document.getElementById('btnNewGame').addEventListener('click', () => {
+        resetGame();
+        showScreen('welcomeScreen');
+    });
+
+    // Traitor count selector
+    document.getElementById('numTraitors').addEventListener('change', (e) => {
+        gameState.numTraitors = parseInt(e.target.value);
+        updateTraitorOptions();
     });
 }
 
-function showScreen(screenId) {
-    const screens = document.querySelectorAll('.screen');
-    screens.forEach(screen => screen.classList.remove('active'));
-    document.getElementById(screenId).classList.add('active');
-}
-
-function playSound(sound) {
-    if (gameState.soundEnabled && sound) {
-        sound.currentTime = 0;
-        sound.play().catch(e => console.log('Sound play failed:', e));
-    }
-}
-
-function playMusic() {
-    if (gameState.musicEnabled && bgMusic) {
-        bgMusic.play().catch(e => console.log('Music play failed:', e));
-    }
-}
-
-function startGame() {
-    // Get settings
-    gameState.numPlayers = parseInt(document.getElementById('numPlayers').value);
-    gameState.numTraitors = parseInt(document.getElementById('numTraitors').value);
-    gameState.currentRevealIndex = 0;
-
-    // Create player array
-    gameState.players = [];
+// Game Flow Functions
+function hostGame() {
+    gameState.isHost = true;
+    gameState.gameCode = generateGameCode();
+    gameState.players = [{
+        id: gameState.playerId,
+        name: gameState.playerName,
+        role: null,
+        eliminated: false,
+        voted: false,
+        isHost: true
+    }];
     
-    // Assign traitors randomly
-    const traitorIndices = [];
-    while (traitorIndices.length < gameState.numTraitors) {
-        const randomIndex = Math.floor(Math.random() * gameState.numPlayers);
-        if (!traitorIndices.includes(randomIndex)) {
-            traitorIndices.push(randomIndex);
-        }
-    }
-
-    // Create player objects
-    for (let i = 0; i < gameState.numPlayers; i++) {
-        gameState.players.push({
-            number: i + 1,
-            role: traitorIndices.includes(i) ? 'traitor' : 'agent',
-            eliminated: false
-        });
-    }
-
-    // Show game screen for role reveals
-    document.getElementById('currentPlayerNum').textContent = 1;
-    document.querySelector('.reveal-info').style.display = 'block';
-    document.getElementById('roleReveal').classList.add('hidden');
-    showScreen('gameScreen');
+    initializePeer(gameState.gameCode);
+    
+    document.getElementById('gameCodeDisplay').textContent = gameState.gameCode;
+    updateLobbyPlayers();
+    updateTraitorOptions();
+    
+    showScreen('hostSetupScreen');
+    saveGameState();
 }
 
-function revealRole() {
-    const player = gameState.players[gameState.currentRevealIndex];
-    const roleReveal = document.getElementById('roleReveal');
-    const roleCard = document.querySelector('.role-card');
+function joinGame(code) {
+    gameState.gameCode = code;
+    gameState.isHost = false;
+    
+    showLoading(true);
+    
+    initializePeer(generateId(), () => {
+        // Connect to host
+        const hostId = code;
+        const conn = peer.connect(hostId);
+        
+        conn.on('open', () => {
+            connections[hostId] = conn;
+            
+            // Send join request
+            conn.send({
+                type: 'join',
+                playerId: gameState.playerId,
+                playerName: gameState.playerName
+            });
+            
+            showLoading(false);
+            document.getElementById('waitingGameCode').textContent = code;
+            showScreen('waitingRoomScreen');
+        });
+        
+        conn.on('data', (data) => handleMessage(data, conn));
+        
+        conn.on('error', (err) => {
+            showLoading(false);
+            showNotification('Failed to join game. Check the code and try again.', 'error');
+            showScreen('joinGameScreen');
+        });
+    });
+}
+
+function initializePeer(id, callback) {
+    if (peer) {
+        peer.destroy();
+    }
+    
+    peer = new Peer(id, {
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        }
+    });
+    
+    peer.on('open', (peerId) => {
+        console.log('Peer initialized:', peerId);
+        if (callback) callback();
+    });
+    
+    peer.on('connection', (conn) => {
+        connections[conn.peer] = conn;
+        
+        conn.on('data', (data) => handleMessage(data, conn));
+        
+        conn.on('close', () => {
+            delete connections[conn.peer];
+            handlePlayerDisconnect(conn.peer);
+        });
+    });
+    
+    peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        showNotification('Connection error. Please try again.', 'error');
+    });
+}
+
+function handleMessage(data, conn) {
+    console.log('Received message:', data);
+    
+    switch(data.type) {
+        case 'join':
+            if (gameState.isHost && gameState.phase === 'lobby') {
+                // Add new player
+                const newPlayer = {
+                    id: data.playerId,
+                    name: data.playerName,
+                    role: null,
+                    eliminated: false,
+                    voted: false,
+                    isHost: false
+                };
+                
+                gameState.players.push(newPlayer);
+                updateLobbyPlayers();
+                saveGameState();
+                
+                // Send current game state to new player
+                conn.send({
+                    type: 'gameState',
+                    state: gameState
+                });
+                
+                // Broadcast to all players
+                broadcastToAll({
+                    type: 'playerJoined',
+                    player: newPlayer,
+                    players: gameState.players
+                });
+                
+                showNotification(`${data.playerName} joined the game`, 'success');
+            }
+            break;
+            
+        case 'gameState':
+            // Receive full game state from host
+            gameState.players = data.state.players;
+            gameState.numTraitors = data.state.numTraitors;
+            gameState.phase = data.state.phase;
+            updateWaitingPlayers();
+            saveGameState();
+            break;
+            
+        case 'playerJoined':
+            gameState.players = data.players;
+            updateWaitingPlayers();
+            saveGameState();
+            showNotification(`${data.player.name} joined the game`, 'success');
+            break;
+            
+        case 'gameStart':
+            gameState.players = data.players;
+            gameState.phase = 'playing';
+            
+            // Find my role
+            const me = gameState.players.find(p => p.id === gameState.playerId);
+            if (me) {
+                gameState.role = me.role;
+            }
+            
+            // Play dramatic music when game starts
+            playMusicOnEvent();
+            
+            saveGameState();
+            showRoleReveal();
+            break;
+            
+        case 'deliberationStart':
+            gameState.phase = 'deliberation';
+            gameState.votes = {};
+            gameState.deliberationStartTime = data.startTime;
+            
+            // Play dramatic music when deliberation starts
+            playMusicOnEvent();
+            
+            saveGameState();
+            showDeliberationScreen();
+            
+            // Start murder timer for traitors
+            if (gameState.role === 'traitor') {
+                setTimeout(() => {
+                    gameState.murderEnabled = true;
+                    if (gameState.phase === 'playing') {
+                        document.getElementById('btnMurderVote').classList.remove('hidden');
+                        showNotification('You can now vote to murder an agent', 'success');
+                    }
+                }, 10 * 60 * 1000); // 10 minutes
+            }
+            break;
+            
+        case 'vote':
+            gameState.votes[data.voterId] = data.targetId;
+            
+            // Update my player's voted status
+            const voter = gameState.players.find(p => p.id === data.voterId);
+            if (voter) voter.voted = true;
+            
+            saveGameState();
+            if (gameState.phase === 'deliberation') {
+                updateVoteStatus();
+            }
+            break;
+            
+        case 'murderVote':
+            if (gameState.role === 'traitor') {
+                gameState.murderVotes[data.voterId] = data.targetId;
+                saveGameState();
+                updateMurderVoteStatus();
+            }
+            break;
+            
+        case 'playerEliminated':
+            const eliminated = gameState.players.find(p => p.id === data.playerId);
+            if (eliminated) {
+                eliminated.eliminated = true;
+                eliminated.role = data.role; // Reveal role
+            }
+            
+            gameState.phase = 'playing';
+            gameState.votes = {};
+            gameState.players.forEach(p => p.voted = false);
+            
+            saveGameState();
+            showNotification(`${data.playerName} was eliminated! They were ${data.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`, 
+                           data.role === 'traitor' ? 'success' : 'error');
+            
+            showScreen('gameScreen');
+            updateGameScreen();
+            checkGameOver();
+            break;
+            
+        case 'playerMurdered':
+            const murdered = gameState.players.find(p => p.id === data.playerId);
+            if (murdered) {
+                murdered.eliminated = true;
+            }
+            
+            gameState.murderVotes = {};
+            gameState.murderEnabled = false;
+            document.getElementById('btnRevealMurder').classList.add('hidden');
+            
+            saveGameState();
+            showNotification(`${data.playerName} was MURDERED by the traitors!`, 'error');
+            updateGameScreen();
+            checkGameOver();
+            break;
+            
+        case 'gameOver':
+            gameState.phase = 'gameOver';
+            
+            // Reveal all roles
+            data.players.forEach(serverPlayer => {
+                const localPlayer = gameState.players.find(p => p.id === serverPlayer.id);
+                if (localPlayer) {
+                    localPlayer.role = serverPlayer.role;
+                }
+            });
+            
+            saveGameState();
+            showGameOver(data.winner);
+            break;
+    }
+}
+
+function startGameAsHost() {
+    if (gameState.players.length < 3) {
+        showNotification('Need at least 3 players to start', 'error');
+        return;
+    }
+    
+    // Validate traitor count
+    if (gameState.numTraitors >= gameState.players.length / 2) {
+        showNotification('Too many traitors! Must be less than half the players.', 'error');
+        return;
+    }
+    
+    // Assign roles
+    assignRoles();
+    
+    gameState.phase = 'playing';
+    saveGameState();
+    
+    // Play dramatic music when game starts
+    playMusicOnEvent();
+    
+    // Broadcast game start to all players
+    broadcastToAll({
+        type: 'gameStart',
+        players: gameState.players
+    });
+    
+    // Show role to host
+    showRoleReveal();
+}
+
+function assignRoles() {
+    // Shuffle players
+    const shuffled = [...gameState.players].sort(() => Math.random() - 0.5);
+    
+    // Assign traitors
+    for (let i = 0; i < gameState.numTraitors; i++) {
+        shuffled[i].role = 'traitor';
+    }
+    
+    // Assign agents to remaining
+    for (let i = gameState.numTraitors; i < shuffled.length; i++) {
+        shuffled[i].role = 'agent';
+    }
+    
+    // Update gameState.players with roles
+    gameState.players = shuffled;
+    
+    // Set my role
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (me) {
+        gameState.role = me.role;
+    }
+}
+
+function showRoleReveal() {
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    
+    if (!me || !me.role) return;
+    
+    const roleCard = document.getElementById('roleCard');
     const roleImage = document.getElementById('roleImage');
     const roleTitle = document.getElementById('roleTitle');
     const roleDescription = document.getElementById('roleDescription');
-
-    // Update role card
-    if (player.role === 'agent') {
+    const traitorsList = document.getElementById('traitorsListContainer');
+    
+    if (me.role === 'agent') {
+        roleCard.className = 'role-card agent';
         roleImage.src = 'assets/Agent.png';
         roleTitle.textContent = 'YOU ARE AN AGENT';
-        roleTitle.style.color = '#00ff00';
-        roleDescription.textContent = 'Your mission is to identify and eliminate the traitors among you. Work with other agents to find the traitors before it\'s too late!';
-        roleCard.className = 'role-card role-agent';
+        roleDescription.textContent = 'Your mission is to identify and eliminate the traitors. Work with other agents to find them before it\'s too late!';
+        traitorsList.classList.add('hidden');
     } else {
+        roleCard.className = 'role-card traitor';
         roleImage.src = 'assets/Cyborg.png';
         roleTitle.textContent = 'YOU ARE A TRAITOR';
-        roleTitle.style.color = '#ff0000';
-        roleDescription.textContent = 'Your mission is to sabotage the agents and remain undetected. Deceive the agents and eliminate them one by one!';
-        roleCard.className = 'role-card role-traitor';
-    }
-
-    // Show role reveal
-    document.querySelector('.reveal-info').style.display = 'none';
-    roleReveal.classList.remove('hidden');
-}
-
-function nextPlayer() {
-    gameState.currentRevealIndex++;
-
-    if (gameState.currentRevealIndex < gameState.numPlayers) {
-        // Show next player reveal
-        document.getElementById('currentPlayerNum').textContent = gameState.currentRevealIndex + 1;
-        document.querySelector('.reveal-info').style.display = 'block';
-        document.getElementById('roleReveal').classList.add('hidden');
-    } else {
-        // All players revealed, start active game
-        startActiveGame();
-    }
-}
-
-function startActiveGame() {
-    // Setup player grid based on number of players
-    const playerSlots = document.querySelectorAll('.player-slot');
-    playerSlots.forEach((slot, index) => {
-        if (index < gameState.numPlayers) {
-            slot.style.display = 'block';
-            slot.classList.remove('eliminated');
-            const offIcon = slot.querySelector('.off');
-            const onIcon = slot.querySelector('.on');
-            offIcon.classList.remove('hidden');
-            onIcon.classList.add('hidden');
+        roleDescription.textContent = 'Your mission is to sabotage the agents and remain undetected. Deceive the agents and eliminate them!';
+        
+        // Show fellow traitors
+        const otherTraitors = gameState.players.filter(p => p.role === 'traitor' && p.id !== gameState.playerId);
+        if (otherTraitors.length > 0) {
+            const traitorsListDiv = document.getElementById('traitorsList');
+            traitorsListDiv.innerHTML = otherTraitors.map(t => `<div class="player-chip">${t.name}</div>`).join('');
+            traitorsList.classList.remove('hidden');
         } else {
-            slot.style.display = 'none';
+            traitorsList.classList.add('hidden');
+        }
+    }
+    
+    showScreen('roleRevealScreen');
+}
+
+function callDeliberation() {
+    gameState.phase = 'deliberation';
+    gameState.votes = {};
+    gameState.deliberationStartTime = Date.now();
+    gameState.players.forEach(p => p.voted = false);
+    
+    saveGameState();
+    
+    // Play dramatic music during deliberation
+    playMusicOnEvent();
+    
+    broadcastToAll({
+        type: 'deliberationStart',
+        startTime: gameState.deliberationStartTime
+    });
+    
+    showDeliberationScreen();
+}
+
+function showDeliberationScreen() {
+    const votingPlayers = document.getElementById('votingPlayers');
+    const alivePlayers = gameState.players.filter(p => !p.eliminated);
+    
+    votingPlayers.innerHTML = alivePlayers.map(p => `
+        <button class="vote-button" data-player-id="${p.id}">
+            ${p.name}${p.id === gameState.playerId ? ' (You)' : ''}
+        </button>
+    `).join('');
+    
+    // Add click listeners
+    votingPlayers.querySelectorAll('.vote-button').forEach(btn => {
+        btn.addEventListener('click', () => voteForPlayer(btn.dataset.playerId));
+    });
+    
+    // Show host actions if host
+    if (gameState.isHost) {
+        document.getElementById('hostDeliberationActions').classList.remove('hidden');
+    }
+    
+    updateVoteStatus();
+    showScreen('deliberationScreen');
+}
+
+function voteForPlayer(targetId) {
+    if (targetId === gameState.playerId) {
+        showNotification('You cannot vote for yourself!', 'error');
+        return;
+    }
+    
+    gameState.votes[gameState.playerId] = targetId;
+    
+    const me = gameState.players.find(p => p.id === gameState.playerId);
+    if (me) me.voted = true;
+    
+    saveGameState();
+    
+    // Broadcast vote
+    broadcastToAll({
+        type: 'vote',
+        voterId: gameState.playerId,
+        targetId: targetId
+    });
+    
+    // Update UI
+    document.querySelectorAll('.vote-button').forEach(btn => {
+        btn.classList.remove('voted');
+    });
+    document.querySelector(`[data-player-id="${targetId}"]`).classList.add('voted');
+    
+    updateVoteStatus();
+}
+
+function updateVoteStatus() {
+    const voteStatus = document.getElementById('voteStatus');
+    const alivePlayers = gameState.players.filter(p => !p.eliminated);
+    const votedCount = Object.keys(gameState.votes).length;
+    
+    voteStatus.innerHTML = `
+        <p>Votes: ${votedCount} / ${alivePlayers.length}</p>
+    `;
+    
+    if (gameState.isHost && votedCount === alivePlayers.length) {
+        showNotification('All players have voted! You can now eliminate a player.', 'success');
+    }
+}
+
+function eliminatePlayer() {
+    const alivePlayers = gameState.players.filter(p => !p.eliminated);
+    const votedCount = Object.keys(gameState.votes).length;
+    
+    if (votedCount < alivePlayers.length) {
+        showNotification('Not all players have voted yet!', 'error');
+        return;
+    }
+    
+    // Count votes
+    const voteCounts = {};
+    Object.values(gameState.votes).forEach(targetId => {
+        voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+    });
+    
+    // Find player with most votes
+    let maxVotes = 0;
+    let eliminatedId = null;
+    const tied = [];
+    
+    Object.entries(voteCounts).forEach(([playerId, count]) => {
+        if (count > maxVotes) {
+            maxVotes = count;
+            eliminatedId = playerId;
+            tied.length = 0;
+            tied.push(playerId);
+        } else if (count === maxVotes) {
+            tied.push(playerId);
         }
     });
-
-    updateGameInfo();
-    showScreen('activeGameScreen');
-}
-
-function togglePlayerElimination(slot) {
-    const playerNum = parseInt(slot.dataset.player);
-    const player = gameState.players.find(p => p.number === playerNum);
     
-    if (player && !player.eliminated) {
-        player.eliminated = true;
-        slot.classList.add('eliminated');
-        
-        // Show explosion effect
-        playSound(explosionSound);
-        
-        checkGameOver();
+    if (tied.length > 1) {
+        showNotification('Vote tied! Voting again...', 'error');
+        gameState.votes = {};
+        gameState.players.forEach(p => p.voted = false);
+        saveGameState();
+        updateVoteStatus();
+        return;
     }
-}
-
-function teamMeeting() {
-    alert('Team Meeting called! Discuss who you think the traitors might be.');
-}
-
-function exposeTraitor() {
-    const playerNum = prompt('Enter the player number you want to expose (1-' + gameState.numPlayers + '):');
     
-    if (playerNum) {
-        const num = parseInt(playerNum);
-        const player = gameState.players.find(p => p.number === num);
+    const eliminated = gameState.players.find(p => p.id === eliminatedId);
+    if (!eliminated) return;
+    
+    eliminated.eliminated = true;
+    
+    // Play dramatic music on elimination
+    playMusicOnEvent();
+    
+    // Broadcast elimination
+    broadcastToAll({
+        type: 'playerEliminated',
+        playerId: eliminatedId,
+        playerName: eliminated.name,
+        role: eliminated.role
+    });
+    
+    gameState.phase = 'playing';
+    gameState.votes = {};
+    gameState.players.forEach(p => p.voted = false);
+    
+    saveGameState();
+    
+    showNotification(`${eliminated.name} was eliminated! They were ${eliminated.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`,
+                    eliminated.role === 'traitor' ? 'success' : 'error');
+    
+    showScreen('gameScreen');
+    updateGameScreen();
+    checkGameOver();
+}
+
+function cancelDeliberation() {
+    gameState.phase = 'playing';
+    gameState.votes = {};
+    gameState.players.forEach(p => p.voted = false);
+    
+    saveGameState();
+    showScreen('gameScreen');
+    updateGameScreen();
+}
+
+function updateMurderVoteScreen() {
+    const murderTargets = document.getElementById('murderTargets');
+    const aliveAgents = gameState.players.filter(p => !p.eliminated && p.role === 'agent');
+    
+    murderTargets.innerHTML = aliveAgents.map(p => `
+        <button class="vote-button agent-target" data-player-id="${p.id}">
+            ${p.name}
+        </button>
+    `).join('');
+    
+    murderTargets.querySelectorAll('.vote-button').forEach(btn => {
+        btn.addEventListener('click', () => voteToMurder(btn.dataset.playerId));
+    });
+    
+    updateMurderVoteStatus();
+}
+
+function voteToMurder(targetId) {
+    gameState.murderVotes[gameState.playerId] = targetId;
+    saveGameState();
+    
+    broadcastToAll({
+        type: 'murderVote',
+        voterId: gameState.playerId,
+        targetId: targetId
+    });
+    
+    document.querySelectorAll('.vote-button').forEach(btn => {
+        btn.classList.remove('voted');
+    });
+    document.querySelector(`[data-player-id="${targetId}"]`).classList.add('voted');
+    
+    updateMurderVoteStatus();
+    
+    showNotification('Vote recorded. Waiting for other traitors...', 'success');
+}
+
+function updateMurderVoteStatus() {
+    const murderVoteStatus = document.getElementById('murderVoteStatus');
+    const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
+    const votedCount = Object.keys(gameState.murderVotes).length;
+    
+    murderVoteStatus.innerHTML = `
+        <p>Traitor Votes: ${votedCount} / ${aliveTraitors.length}</p>
+    `;
+    
+    if (votedCount === aliveTraitors.length) {
+        showNotification('All traitors have voted! Waiting for host to reveal murder...', 'success');
         
-        if (player && !player.eliminated) {
-            if (player.role === 'traitor') {
-                alert('Player ' + num + ' is a TRAITOR! They have been exposed!');
-                player.eliminated = true;
-                const slot = document.querySelector(`.player-slot[data-player="${num}"]`);
-                if (slot) {
-                    slot.classList.add('eliminated');
-                    const offIcon = slot.querySelector('.off');
-                    const onIcon = slot.querySelector('.on');
-                    offIcon.classList.add('hidden');
-                    onIcon.classList.remove('hidden');
-                    
-                    // Change to red icon
-                    onIcon.src = `assets/${num}_RED_ON.png`;
-                }
-                playSound(explosionSound);
-            } else {
-                alert('Player ' + num + ' is an AGENT! Wrong accusation!');
-                player.eliminated = true;
-                const slot = document.querySelector(`.player-slot[data-player="${num}"]`);
-                if (slot) {
-                    slot.classList.add('eliminated');
-                }
-            }
-            
-            checkGameOver();
-        } else if (player && player.eliminated) {
-            alert('This player has already been eliminated!');
-        } else {
-            alert('Invalid player number!');
+        if (gameState.isHost) {
+            document.getElementById('btnRevealMurder').classList.remove('hidden');
         }
+        
+        setTimeout(() => {
+            showScreen('gameScreen');
+            updateGameScreen();
+        }, 2000);
     }
 }
 
-function updateGameInfo() {
-    const activeAgents = gameState.players.filter(p => p.role === 'agent' && !p.eliminated).length;
-    const activeTraitors = gameState.players.filter(p => p.role === 'traitor' && !p.eliminated).length;
+function revealMurder() {
+    const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
+    const votedCount = Object.keys(gameState.murderVotes).length;
     
-    document.getElementById('agentCount').textContent = activeAgents;
-    document.getElementById('traitorCount').textContent = activeTraitors;
+    if (votedCount < aliveTraitors.length) {
+        showNotification('Not all traitors have voted yet!', 'error');
+        return;
+    }
+    
+    // Count votes
+    const voteCounts = {};
+    Object.values(gameState.murderVotes).forEach(targetId => {
+        voteCounts[targetId] = (voteCounts[targetId] || 0) + 1;
+    });
+    
+    // Find agent with most votes (random if tied)
+    let maxVotes = 0;
+    const topTargets = [];
+    
+    Object.entries(voteCounts).forEach(([playerId, count]) => {
+        if (count > maxVotes) {
+            maxVotes = count;
+            topTargets.length = 0;
+            topTargets.push(playerId);
+        } else if (count === maxVotes) {
+            topTargets.push(playerId);
+        }
+    });
+    
+    const murderedId = topTargets[Math.floor(Math.random() * topTargets.length)];
+    const murdered = gameState.players.find(p => p.id === murderedId);
+    
+    if (!murdered) return;
+    
+    murdered.eliminated = true;
+    
+    // Play dramatic music on murder reveal
+    playMusicOnEvent();
+    
+    broadcastToAll({
+        type: 'playerMurdered',
+        playerId: murderedId,
+        playerName: murdered.name
+    });
+    
+    gameState.murderVotes = {};
+    gameState.murderEnabled = false;
+    document.getElementById('btnRevealMurder').classList.add('hidden');
+    
+    saveGameState();
+    
+    showNotification(`${murdered.name} was MURDERED by the traitors!`, 'error');
+    updateGameScreen();
+    checkGameOver();
 }
 
 function checkGameOver() {
-    updateGameInfo();
+    const aliveAgents = gameState.players.filter(p => !p.eliminated && p.role === 'agent').length;
+    const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor').length;
     
-    const activeAgents = gameState.players.filter(p => p.role === 'agent' && !p.eliminated).length;
-    const activeTraitors = gameState.players.filter(p => p.role === 'traitor' && !p.eliminated).length;
+    let winner = null;
     
-    if (activeTraitors === 0) {
-        endGame('AGENTS WIN!', 'All traitors have been eliminated!');
-    } else if (activeAgents <= activeTraitors) {
-        endGame('TRAITORS WIN!', 'The traitors have taken control!');
+    if (aliveTraitors === 0) {
+        winner = 'agents';
+    } else if (aliveAgents <= aliveTraitors) {
+        winner = 'traitors';
+    }
+    
+    if (winner) {
+        gameState.phase = 'gameOver';
+        saveGameState();
+        
+        // Play dramatic music for game over
+        playMusicOnEvent();
+        
+        if (gameState.isHost) {
+            broadcastToAll({
+                type: 'gameOver',
+                winner: winner,
+                players: gameState.players
+            });
+        }
+        
+        showGameOver(winner);
     }
 }
 
-function endGame(title, message) {
-    playSound(sirenSound);
+function showGameOver(winner) {
+    const winnerTitle = document.getElementById('winnerTitle');
+    const winnerMessage = document.getElementById('winnerMessage');
+    const finalRolesList = document.getElementById('finalRolesList');
     
-    document.getElementById('winnerTitle').textContent = title;
-    document.getElementById('winnerMessage').textContent = message;
+    if (winner === 'agents') {
+        winnerTitle.textContent = 'AGENTS WIN!';
+        winnerTitle.className = 'winner-title agents-win';
+        winnerMessage.textContent = 'All traitors have been eliminated!';
+    } else {
+        winnerTitle.textContent = 'TRAITORS WIN!';
+        winnerTitle.className = 'winner-title traitors-win';
+        winnerMessage.textContent = 'The traitors have taken control!';
+    }
     
-    // Show final roles
-    const finalRoles = document.getElementById('finalRoles');
-    finalRoles.innerHTML = '<h3>Final Roles:</h3>';
-    
-    gameState.players.forEach(player => {
-        const roleItem = document.createElement('div');
-        roleItem.className = 'role-list-item ' + player.role;
-        roleItem.textContent = `Player ${player.number}: ${player.role.toUpperCase()}${player.eliminated ? ' (Eliminated)' : ''}`;
-        finalRoles.appendChild(roleItem);
-    });
+    finalRolesList.innerHTML = gameState.players.map(p => `
+        <div class="role-item ${p.role}">
+            <span>${p.name}</span>
+            <span class="role-badge ${p.role}">${p.role.toUpperCase()}</span>
+        </div>
+    `).join('');
     
     showScreen('gameOverScreen');
 }
 
+// UI Update Functions
+function updateLobbyPlayers() {
+    const lobbyPlayers = document.getElementById('lobbyPlayers');
+    lobbyPlayers.innerHTML = gameState.players.map(p => `
+        <div class="player-chip ${p.isHost ? 'host' : ''}">
+            ${p.name}${p.isHost ? ' 👑' : ''}
+        </div>
+    `).join('');
+    
+    // Enable start button if enough players
+    const startBtn = document.getElementById('btnStartGame');
+    startBtn.disabled = gameState.players.length < 3;
+}
+
+function updateWaitingPlayers() {
+    const waitingPlayers = document.getElementById('waitingPlayers');
+    waitingPlayers.innerHTML = gameState.players.map(p => `
+        <div class="player-chip ${p.isHost ? 'host' : ''}">
+            ${p.name}${p.isHost ? ' 👑' : ''}
+        </div>
+    `).join('');
+}
+
+function updateGameScreen() {
+    const playersGrid = document.getElementById('playersGrid');
+    const aliveAgents = gameState.players.filter(p => !p.eliminated && p.role === 'agent').length;
+    const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor').length;
+    
+    document.getElementById('agentCount').textContent = aliveAgents;
+    document.getElementById('traitorCount').textContent = aliveTraitors;
+    
+    playersGrid.innerHTML = gameState.players.map(p => {
+        const isMe = p.id === gameState.playerId;
+        const showRole = p.eliminated || isMe;
+        
+        return `
+            <div class="player-card ${p.eliminated ? 'eliminated' : 'alive'} ${isMe ? 'you' : ''}">
+                <div class="player-name">${p.name}${isMe ? ' (You)' : ''}</div>
+                ${showRole ? `<div class="player-status ${p.eliminated ? 'dead' : ''}">${p.role ? p.role.toUpperCase() : ''}</div>` : ''}
+                ${p.eliminated ? '<div class="player-status dead">ELIMINATED</div>' : ''}
+            </div>
+        `;
+    }).join('');
+    
+    // Show/hide action buttons
+    if (gameState.isHost) {
+        document.getElementById('hostActions').classList.remove('hidden');
+    }
+    
+    if (gameState.role === 'traitor' && gameState.murderEnabled) {
+        document.getElementById('traitorActions').classList.remove('hidden');
+        document.getElementById('btnMurderVote').classList.remove('hidden');
+    }
+}
+
+function updateTraitorOptions() {
+    const numTraitors = document.getElementById('numTraitors');
+    const playerCount = gameState.players.length;
+    const maxTraitors = Math.floor(playerCount / 2) - 1;
+    
+    numTraitors.innerHTML = '';
+    for (let i = 1; i <= Math.max(1, maxTraitors); i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${i} Traitor${i > 1 ? 's' : ''}`;
+        if (i === gameState.numTraitors) option.selected = true;
+        numTraitors.appendChild(option);
+    }
+}
+
+// Utility Functions
+function broadcastToAll(message) {
+    Object.values(connections).forEach(conn => {
+        try {
+            conn.send(message);
+        } catch (e) {
+            console.error('Failed to send to peer:', e);
+        }
+    });
+}
+
+function handlePlayerDisconnect(peerId) {
+    const player = gameState.players.find(p => p.id === peerId);
+    if (player) {
+        showNotification(`${player.name} disconnected`, 'error');
+    }
+    
+    // If host disconnected and we're next, become host
+    if (player && player.isHost && !gameState.isHost && gameState.players.length > 1) {
+        gameState.isHost = true;
+        player.isHost = false;
+        
+        const me = gameState.players.find(p => p.id === gameState.playerId);
+        if (me) me.isHost = true;
+        
+        showNotification('You are now the host!', 'success');
+        saveGameState();
+        
+        if (gameState.phase === 'playing') {
+            updateGameScreen();
+        }
+    }
+}
+
+function reconnectToGame() {
+    if (gameState.isHost) {
+        initializePeer(gameState.gameCode);
+        
+        if (gameState.phase === 'lobby') {
+            showScreen('hostSetupScreen');
+            document.getElementById('gameCodeDisplay').textContent = gameState.gameCode;
+            updateLobbyPlayers();
+        } else if (gameState.phase === 'playing') {
+            showScreen('gameScreen');
+            updateGameScreen();
+        }
+    } else {
+        // Try to reconnect as non-host
+        joinGame(gameState.gameCode);
+    }
+}
+
+function cancelHosting() {
+    resetGame();
+    showScreen('nameScreen');
+}
+
+function leaveGame() {
+    resetGame();
+    showScreen('welcomeScreen');
+}
+
 function resetGame() {
+    if (peer) peer.destroy();
+    connections = {};
+    
+    gameState.gameCode = '';
+    gameState.isHost = false;
+    gameState.role = null;
     gameState.players = [];
-    gameState.currentRevealIndex = 0;
-    showScreen('menuScreen');
+    gameState.phase = 'lobby';
+    gameState.votes = {};
+    gameState.murderVotes = {};
+    gameState.murderEnabled = false;
+    
+    localStorage.removeItem('traitorsGameState');
+}
+
+function generateGameCode() {
+    return Math.random().toString(36).substring(2, 6).toUpperCase();
+}
+
+function generateId() {
+    return Math.random().toString(36).substring(2, 15);
+}
+
+function showScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(screenId).classList.add('active');
+}
+
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    notification.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.classList.remove('hidden');
+    
+    setTimeout(() => {
+        notification.classList.add('hidden');
+    }, 3000);
+}
+
+function showLoading(show) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (show) {
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
+function playMusicOnEvent() {
+    if (bgMusic) {
+        // Stop any existing timeout
+        if (musicTimeout) {
+            clearTimeout(musicTimeout);
+        }
+        
+        // Play the music
+        bgMusic.currentTime = 0;
+        bgMusic.play().catch(e => console.log('Music play failed:', e));
+        
+        // Stop after 2 minutes (120000 ms)
+        musicTimeout = setTimeout(() => {
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
+        }, 120000);
+    }
+}
+
+// LocalStorage
+function saveGameState() {
+    const stateToSave = {
+        playerName: gameState.playerName,
+        playerId: gameState.playerId,
+        gameCode: gameState.gameCode,
+        isHost: gameState.isHost,
+        role: gameState.role,
+        players: gameState.players,
+        numTraitors: gameState.numTraitors,
+        phase: gameState.phase,
+        murderEnabled: gameState.murderEnabled
+    };
+    
+    localStorage.setItem('traitorsGameState', JSON.stringify(stateToSave));
+}
+
+function loadGameState() {
+    const saved = localStorage.getItem('traitorsGameState');
+    if (saved) {
+        try {
+            const state = JSON.parse(saved);
+            Object.assign(gameState, state);
+        } catch (e) {
+            console.error('Failed to load game state:', e);
+            localStorage.removeItem('traitorsGameState');
+        }
+    }
 }
 
 // Prevent accidental page refresh
-window.addEventListener('beforeunload', function (e) {
-    if (gameState.players.length > 0) {
+window.addEventListener('beforeunload', (e) => {
+    if (gameState.players.length > 0 && gameState.phase !== 'gameOver') {
         e.preventDefault();
         e.returnValue = '';
     }
