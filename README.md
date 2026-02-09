@@ -13,20 +13,31 @@ SPY BOT is a social deduction game where:
 ## How to Play
 
 1. **Open the Game**: Open `index.html` in a web browser
-2. **Start a New Game**: Click "Play" then "Create Game"
+2. **Start a New Game**: The game host clicks "Play" then "Create Game"
+   - The host enters their name
+   - The host is notified when new players join the game
+   - The host screen shows a list of all players in the game
 3. **Configure Settings**:
-   - Choose number of players (3-5)
-   - Choose number of traitors (1-2)
-4. **Role Assignment**:
+   - Choose number of players (3-20)
+   - Choose number of traitors (1-9) - must be < half of the players
+   - This creates a 4 digit code that other players can use to 'join' the game.
+4. **Join an Existing Game**:
+   - Other players click "Play" then "Join Game"
+   - Type in name
+   - Type in the 4 digit code provided by the host.
+   - Click "Join"
+   - The 'others' see a list of all the players in the game
+   - The list of players is updated as new players join the game
+5. **Role Assignment**:
    - Pass the device around to each player
    - Each player clicks "Tap to Reveal" to see their secret role
    - Click "Next Player" after viewing your role
-5. **Play the Game**:
+6. **Play the Game**:
    - Discuss among players who might be the traitors
    - Use "Team Meeting" to call discussions
    - Use "Exposed" to officially accuse and eliminate a player
    - Click on player icons to mark them as eliminated
-6. **Win Conditions**:
+7. **Win Conditions**:
    - **Agents win** if all Traitors are eliminated
    - **Traitors win** if they equal or outnumber the Agents
 
