@@ -155,7 +155,12 @@
             <div id="voteStatus" class="vote-status"></div>
             
             <div id="hostDeliberationActions" class="action-section hidden">
-                <button id="btnEliminatePlayer" class="btn-danger">ELIMINATE PLAYER</button>
+                <p class="help-text" style="margin-bottom: 15px;">
+                    <strong>Digital Vote:</strong> Wait for all votes, then click "Count Votes"<br>
+                    <strong>Paper Vote:</strong> Select player above, then click "Manual Eliminate"
+                </p>
+                <button id="btnEliminatePlayer" class="btn-danger">COUNT VOTES</button>
+                <button id="btnManualEliminate" class="btn-danger" disabled>MANUAL ELIMINATE</button>
                 <button id="btnCancelDeliberation" class="btn-secondary">CANCEL</button>
             </div>
         </div>
@@ -207,7 +212,7 @@
     <script src="script.js"></script>
     
     <!-- Version Number -->
-    <div class="version-number">v004</div>
+    <div class="version-number">v006</div>
     
     <!-- Emergency Reset Button (hidden on welcome screen) -->
     <button id="emergencyReset" class="emergency-reset hidden" title="Reset/Quit Game">

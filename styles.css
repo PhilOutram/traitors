@@ -57,6 +57,7 @@ body::before {
     left: 0;
     width: 100%;
     min-height: 100vh;
+    height: 100vh;
     justify-content: center;
     align-items: center;
     padding: var(--spacing-md);
@@ -82,11 +83,14 @@ body::before {
 .screen-content {
     width: 100%;
     max-width: 500px;
+    max-height: calc(100vh - 40px);
     background: var(--color-bg-card);
     border-radius: var(--border-radius);
     padding: var(--spacing-lg);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     text-align: center;
+    overflow-y: auto;
+    margin: auto 0;
 }
 
 /* Typography */

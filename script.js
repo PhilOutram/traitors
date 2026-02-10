@@ -128,6 +128,7 @@ function setupEventListeners() {
 
     // Deliberation
     document.getElementById('btnEliminatePlayer').addEventListener('click', eliminatePlayer);
+    document.getElementById('btnManualEliminate').addEventListener('click', manualEliminatePlayer);
     document.getElementById('btnCancelDeliberation').addEventListener('click', cancelDeliberation);
 
     // Game over
@@ -729,6 +730,11 @@ function voteForPlayer(targetId) {
     });
     document.querySelector(`[data-player-id="${targetId}"]`).classList.add('voted');
     
+    // Enable manual eliminate button for host
+    if (gameState.isHost) {
+        document.getElementById('btnManualEliminate').disabled = false;
+    }
+    
     updateVoteStatus();
 }
 
@@ -798,6 +804,54 @@ function eliminatePlayer() {
     broadcastToAll({
         type: 'playerEliminated',
         playerId: eliminatedId,
+        playerName: eliminated.name,
+        role: eliminated.role
+    });
+    
+    gameState.phase = 'playing';
+    gameState.votes = {};
+    gameState.players.forEach(p => p.voted = false);
+    
+    saveGameState();
+    
+    showNotification(`${eliminated.name} was eliminated! They were ${eliminated.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`,
+                    eliminated.role === 'traitor' ? 'success' : 'error');
+    
+    showScreen('gameScreen');
+    updateGameScreen();
+    checkGameOver();
+}
+
+function manualEliminatePlayer() {
+    if (!gameState.isHost) return;
+    
+    // Check if host has selected a player
+    const hostVote = gameState.votes[gameState.playerId];
+    if (!hostVote) {
+        showNotification('Please select a player first by clicking their button above', 'error');
+        return;
+    }
+    
+    const eliminated = gameState.players.find(p => p.id === hostVote);
+    if (!eliminated || eliminated.eliminated) {
+        showNotification('Invalid player selection', 'error');
+        return;
+    }
+    
+    // Confirm elimination
+    if (!confirm(`Manually eliminate ${eliminated.name}?`)) {
+        return;
+    }
+    
+    eliminated.eliminated = true;
+    
+    // Play dramatic music on elimination
+    playMusicOnEvent();
+    
+    // Broadcast elimination
+    broadcastToAll({
+        type: 'playerEliminated',
+        playerId: eliminated.id,
         playerName: eliminated.name,
         role: eliminated.role
     });
