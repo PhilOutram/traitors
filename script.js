@@ -31,16 +31,33 @@ document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
     loadGameState();
     
-    // Show welcome screen or restore game
-    if (gameState.gameCode && gameState.players.length > 0) {
-        showNotification('Reconnecting to game...', 'success');
-        reconnectToGame();
+    // Show welcome screen or ask about reconnecting
+    if (gameState.gameCode && gameState.players.length > 0 && gameState.phase !== 'gameOver') {
+        showReconnectPrompt();
     } else {
+        // Clear old state if game was over
+        if (gameState.phase === 'gameOver') {
+            resetGame();
+        }
         showScreen('welcomeScreen');
     }
 });
 
 function setupEventListeners() {
+    // Emergency reset button
+    document.getElementById('emergencyReset').addEventListener('click', () => {
+        if (confirm('Are you sure you want to quit the game? This cannot be undone.')) {
+            if (gameState.isHost) {
+                broadcastToAll({
+                    type: 'gameCancelled'
+                });
+            }
+            resetGame();
+            showScreen('welcomeScreen');
+            showNotification('Game reset', 'success');
+        }
+    });
+    
     // Welcome screen
     document.getElementById('btnPlay').addEventListener('click', () => {
         showScreen('nameScreen');
@@ -72,15 +89,20 @@ function setupEventListeners() {
     // Join game
     document.getElementById('btnConfirmJoin').addEventListener('click', () => {
         const code = document.getElementById('gameCodeInput').value.trim().toUpperCase();
-        if (code.length === 4) {
+        if (code.length === 4 && /^[A-Z]+$/.test(code)) {
             joinGame(code);
         } else {
-            showNotification('Please enter a 4-digit game code', 'error');
+            showNotification('Please enter a 4-letter game code', 'error');
         }
     });
 
     document.getElementById('btnCancelJoin').addEventListener('click', () => {
         showScreen('nameScreen');
+    });
+    
+    // Auto-uppercase game code input
+    document.getElementById('gameCodeInput').addEventListener('input', (e) => {
+        e.target.value = e.target.value.toUpperCase();
     });
 
     // Host setup
@@ -1136,6 +1158,20 @@ function reconnectToGame() {
     }
 }
 
+function showReconnectPrompt() {
+    const roleText = gameState.role ? ` as ${gameState.role}` : '';
+    const message = `You were in a game${roleText}. Do you want to reconnect?`;
+    
+    if (confirm(message)) {
+        showNotification('Reconnecting to game...', 'success');
+        reconnectToGame();
+    } else {
+        // Start fresh
+        resetGame();
+        showScreen('welcomeScreen');
+    }
+}
+
 function cancelHosting() {
     // Notify all players that game is cancelled
     if (gameState.isHost && gameState.players.length > 1) {
@@ -1155,6 +1191,13 @@ function leaveGame() {
             type: 'playerLeft',
             playerId: gameState.playerId,
             playerName: gameState.playerName
+        });
+    }
+    
+    // If we're the host, notify everyone the game is cancelled
+    if (gameState.isHost) {
+        broadcastToAll({
+            type: 'gameCancelled'
         });
     }
     
@@ -1179,7 +1222,13 @@ function resetGame() {
 }
 
 function generateGameCode() {
-    return Math.random().toString(36).substring(2, 6).toUpperCase();
+    // Generate 4-letter code (easier on mobile keyboards)
+    const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // Removed I and O to avoid confusion
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+        code += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    return code;
 }
 
 function generateId() {
@@ -1189,6 +1238,14 @@ function generateId() {
 function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
+    
+    // Show/hide emergency reset button
+    const resetBtn = document.getElementById('emergencyReset');
+    if (screenId === 'welcomeScreen') {
+        resetBtn.classList.add('hidden');
+    } else {
+        resetBtn.classList.remove('hidden');
+    }
 }
 
 function showNotification(message, type = 'success') {

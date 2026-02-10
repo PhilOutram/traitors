@@ -62,7 +62,8 @@
     <div id="joinGameScreen" class="screen">
         <div class="screen-content">
             <h2>JOIN GAME</h2>
-            <input type="text" id="gameCodeInput" class="text-input game-code-input" placeholder="Enter 4-digit code" maxlength="4">
+            <input type="text" id="gameCodeInput" class="text-input game-code-input" placeholder="----" maxlength="4">
+            <p class="help-text" style="margin-top: -10px; margin-bottom: 10px;">Enter 4-letter game code</p>
             <div id="joinStatus" class="status-message"></div>
             <div class="button-group">
                 <button id="btnConfirmJoin" class="btn-primary">JOIN</button>
@@ -71,7 +72,7 @@
             <div class="help-text" style="margin-top: 20px;">
                 <p><strong>Troubleshooting:</strong></p>
                 <p style="font-size: 0.85rem; margin-top: 10px;">• Make sure the host has created the game</p>
-                <p style="font-size: 0.85rem;">• Check that the 4-digit code is correct</p>
+                <p style="font-size: 0.85rem;">• Check that the 4-letter code is correct</p>
                 <p style="font-size: 0.85rem;">• Both devices need internet connection</p>
             </div>
         </div>
@@ -206,6 +207,16 @@
     <script src="script.js"></script>
     
     <!-- Version Number -->
-    <div class="version-number">v003</div>
+    <div class="version-number">v004</div>
+    
+    <!-- Emergency Reset Button (hidden on welcome screen) -->
+    <button id="emergencyReset" class="emergency-reset hidden" title="Reset/Quit Game">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M3 21v-5h5"/>
+        </svg>
+    </button>
 </body>
 </html>
