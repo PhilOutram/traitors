@@ -691,6 +691,13 @@ h3 {
     display: none;
 }
 
+.help-icon {
+    font-size: 28px;
+    font-weight: bold;
+    line-height: 1;
+    margin-top: -2px;
+}
+
 /* Emergency Reset Button */
 .emergency-reset {
     position: fixed;
