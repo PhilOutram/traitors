@@ -44,6 +44,19 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
+    // Help button
+    document.getElementById('helpButton').addEventListener('click', () => {
+        showScreen('helpScreen');
+    });
+    
+    document.getElementById('btnCloseHelp').addEventListener('click', () => {
+        showScreen('welcomeScreen');
+    });
+    
+    document.getElementById('btnCloseHelpBottom').addEventListener('click', () => {
+        showScreen('welcomeScreen');
+    });
+    
     // Reconnect dialog buttons
     document.getElementById('btnReconnectYes').addEventListener('click', () => {
         document.getElementById('reconnectDialog').classList.add('hidden');
@@ -1303,10 +1316,18 @@ function showScreen(screenId) {
     
     // Show/hide emergency reset button
     const resetBtn = document.getElementById('emergencyReset');
-    if (screenId === 'welcomeScreen') {
+    if (screenId === 'welcomeScreen' || screenId === 'helpScreen') {
         resetBtn.classList.add('hidden');
     } else {
         resetBtn.classList.remove('hidden');
+    }
+    
+    // Show/hide help button (only on welcome and name screens)
+    const helpBtn = document.getElementById('helpButton');
+    if (screenId === 'welcomeScreen' || screenId === 'nameScreen') {
+        helpBtn.classList.remove('hidden');
+    } else {
+        helpBtn.classList.add('hidden');
     }
 }
 

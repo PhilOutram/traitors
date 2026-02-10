@@ -212,7 +212,16 @@
     <script src="script.js"></script>
     
     <!-- Version Number -->
-    <div class="version-number">v007</div>
+    <div class="version-number">v008</div>
+    
+    <!-- Help Button (shown on welcome/name screens) -->
+    <button id="helpButton" class="help-button" title="Help & Instructions">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+    </button>
     
     <!-- Emergency Reset Button (hidden on welcome screen) -->
     <button id="emergencyReset" class="emergency-reset hidden" title="Reset/Quit Game">
@@ -233,6 +242,136 @@
                 <button id="btnReconnectYes" class="btn-primary">YES</button>
                 <button id="btnReconnectNo" class="btn-secondary">NO, START NEW GAME</button>
             </div>
+        </div>
+    </div>
+    
+    <!-- Help Screen -->
+    <div id="helpScreen" class="screen">
+        <div class="screen-content help-content">
+            <button id="btnCloseHelp" class="close-help-btn">✕</button>
+            <h1>THE TRAITORS</h1>
+            <h2>How to Play</h2>
+            
+            <div class="help-section">
+                <h3>🎮 About the Game</h3>
+                <p>A real-time multiplayer social deduction game where players use their own devices to play together. Players are secretly assigned as either <strong>Agents</strong> (good) or <strong>Traitors</strong> (bad).</p>
+                <ul>
+                    <li>Agents must identify and eliminate Traitors through deliberations</li>
+                    <li>Traitors can murder Agents and must remain hidden</li>
+                    <li>Game ends when all Traitors are eliminated (Agents win) or Traitors equal/outnumber Agents (Traitors win)</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>🚀 Getting Started</h3>
+                <h4>Host a Game:</h4>
+                <ol>
+                    <li>Enter your name and click "HOST GAME"</li>
+                    <li>Share the 4-letter game code with other players</li>
+                    <li>Choose number of traitors (must be less than half the players)</li>
+                    <li>Click "START GAME" when everyone has joined (need 3+ players)</li>
+                </ol>
+                
+                <h4>Join a Game:</h4>
+                <ol>
+                    <li>Enter your name and click "JOIN GAME"</li>
+                    <li>Enter the 4-letter code from the host</li>
+                    <li>Wait for the host to start the game</li>
+                </ol>
+            </div>
+            
+            <div class="help-section">
+                <h3>🎭 Role Reveal</h3>
+                <p>Each player secretly views their role on their own device:</p>
+                <ul>
+                    <li><strong class="agent-text">Agents:</strong> See they are an agent</li>
+                    <li><strong class="traitor-text">Traitors:</strong> See they are a traitor AND who the other traitors are</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>⚔️ Gameplay</h3>
+                
+                <h4>Deliberations:</h4>
+                <ul>
+                    <li>The host can call a deliberation at any time</li>
+                    <li>All players vote for someone to eliminate</li>
+                    <li>The player with the most votes is eliminated and their role is revealed</li>
+                    <li>If there's a tie, voting happens again</li>
+                </ul>
+                
+                <h4>Paper Voting:</h4>
+                <ul>
+                    <li>Host can select a player and click "MANUAL ELIMINATE"</li>
+                    <li>Use this for physical paper ballot voting</li>
+                </ul>
+                
+                <h4>Traitor Murders:</h4>
+                <ul>
+                    <li>10 minutes after each deliberation, traitors can vote to murder an agent</li>
+                    <li>All traitors vote secretly</li>
+                    <li>The host reveals the murdered player</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>🏆 Win Conditions</h3>
+                <ul>
+                    <li><strong class="agent-text">Agents Win:</strong> All traitors are eliminated</li>
+                    <li><strong class="traitor-text">Traitors Win:</strong> Traitors equal or outnumber agents</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>💡 Tips</h3>
+                <ul>
+                    <li><strong>For Agents:</strong> Pay attention to voting patterns and who suggests eliminations</li>
+                    <li><strong>For Traitors:</strong> Stay coordinated, spread doubt, and blend in during deliberations</li>
+                    <li><strong>Optimal Players:</strong> 5-10 players</li>
+                    <li><strong>Traitor Ratio:</strong> 1 traitor per 3-4 players works best</li>
+                    <li>Use separate voice chat (Discord, in-person) for deliberations</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>🔧 Troubleshooting</h3>
+                
+                <h4>Can't join game:</h4>
+                <ul>
+                    <li>Check the game code is correct (4 letters)</li>
+                    <li>Make sure host's game is still running</li>
+                    <li>Both devices need internet connection</li>
+                    <li>Try refreshing both devices</li>
+                </ul>
+                
+                <h4>Connection lost:</h4>
+                <ul>
+                    <li>Check internet connection</li>
+                    <li>Refresh the page (game state is saved)</li>
+                    <li>If host disconnected, another player can become host</li>
+                </ul>
+                
+                <h4>Game stuck:</h4>
+                <ul>
+                    <li>Click the red reset button (top-right)</li>
+                    <li>This will quit and restart the game</li>
+                </ul>
+            </div>
+            
+            <div class="help-section">
+                <h3>🎯 Features</h3>
+                <ul>
+                    <li>✅ Real-time multiplayer (3-20 players)</li>
+                    <li>✅ Mobile-first design</li>
+                    <li>✅ Secret role assignment</li>
+                    <li>✅ Digital or paper voting</li>
+                    <li>✅ Automatic win detection</li>
+                    <li>✅ Game state persists if browser closes</li>
+                    <li>✅ Host failover if host disconnects</li>
+                </ul>
+            </div>
+            
+            <button id="btnCloseHelpBottom" class="btn-primary" style="margin-top: 20px;">CLOSE</button>
         </div>
     </div>
 </body>
