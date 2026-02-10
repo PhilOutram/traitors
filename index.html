@@ -212,7 +212,7 @@
     <script src="script.js"></script>
     
     <!-- Version Number -->
-    <div class="version-number">v006</div>
+    <div class="version-number">v007</div>
     
     <!-- Emergency Reset Button (hidden on welcome screen) -->
     <button id="emergencyReset" class="emergency-reset hidden" title="Reset/Quit Game">
@@ -223,5 +223,17 @@
             <path d="M3 21v-5h5"/>
         </svg>
     </button>
+    
+    <!-- Reconnect Dialog -->
+    <div id="reconnectDialog" class="dialog-overlay hidden">
+        <div class="dialog-box">
+            <h2>Game In Progress</h2>
+            <p id="reconnectMessage" class="dialog-message"></p>
+            <div class="dialog-buttons">
+                <button id="btnReconnectYes" class="btn-primary">YES</button>
+                <button id="btnReconnectNo" class="btn-secondary">NO, START NEW GAME</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

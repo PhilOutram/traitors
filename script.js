@@ -44,6 +44,19 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
+    // Reconnect dialog buttons
+    document.getElementById('btnReconnectYes').addEventListener('click', () => {
+        document.getElementById('reconnectDialog').classList.add('hidden');
+        showNotification('Reconnecting to game...', 'success');
+        reconnectToGame();
+    });
+    
+    document.getElementById('btnReconnectNo').addEventListener('click', () => {
+        document.getElementById('reconnectDialog').classList.add('hidden');
+        resetGame();
+        showScreen('welcomeScreen');
+    });
+    
     // Emergency reset button
     document.getElementById('emergencyReset').addEventListener('click', () => {
         if (confirm('Are you sure you want to quit the game? This cannot be undone.')) {
@@ -1213,17 +1226,12 @@ function reconnectToGame() {
 }
 
 function showReconnectPrompt() {
-    const roleText = gameState.role ? ` as ${gameState.role}` : '';
-    const message = `You were in a game${roleText}. Do you want to reconnect?`;
+    const roleText = gameState.role ? ` as ${gameState.role === 'agent' ? 'an Agent' : 'a Traitor'}` : '';
+    const phaseText = gameState.phase === 'lobby' ? 'in the lobby' : 'in progress';
+    const message = `You were in a game ${phaseText}${roleText}. Do you want to reconnect?`;
     
-    if (confirm(message)) {
-        showNotification('Reconnecting to game...', 'success');
-        reconnectToGame();
-    } else {
-        // Start fresh
-        resetGame();
-        showScreen('welcomeScreen');
-    }
+    document.getElementById('reconnectMessage').textContent = message;
+    document.getElementById('reconnectDialog').classList.remove('hidden');
 }
 
 function cancelHosting() {

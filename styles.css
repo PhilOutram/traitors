@@ -692,6 +692,72 @@ h3 {
     display: none;
 }
 
+/* Custom Dialog */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.dialog-overlay.hidden {
+    display: none;
+}
+
+.dialog-box {
+    background: var(--color-bg-card);
+    border: 2px solid var(--color-primary);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-xl);
+    max-width: 450px;
+    width: 90%;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8);
+    text-align: center;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.dialog-box h2 {
+    color: var(--color-primary);
+    margin-bottom: var(--spacing-md);
+}
+
+.dialog-message {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin: var(--spacing-lg) 0;
+    color: var(--color-text);
+}
+
+.dialog-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+}
+
+.dialog-buttons .btn-primary,
+.dialog-buttons .btn-secondary {
+    margin: 0;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     h1 {
