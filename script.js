@@ -19,6 +19,9 @@ let peer = null;
 let connections = {};
 let isConnecting = false;
 
+// Murder timer
+let murderTimerId = null;
+
 // Audio
 let bgMusic;
 let musicTimeout = null;
@@ -462,17 +465,6 @@ function handleMessage(data, conn) {
             
             saveGameState();
             showDeliberationScreen();
-            
-            // Start murder timer for traitors
-            if (gameState.role === 'traitor') {
-                setTimeout(() => {
-                    gameState.murderEnabled = true;
-                    if (gameState.phase === 'playing') {
-                        document.getElementById('btnMurderVote').classList.remove('hidden');
-                        showNotification('You can now vote to murder an agent', 'success');
-                    }
-                }, 10 * 60 * 1000); // 10 minutes
-            }
             break;
             
         case 'vote':
@@ -515,7 +507,19 @@ function handleMessage(data, conn) {
             updateGameScreen();
             checkGameOver();
             break;
-            
+
+        case 'voteTied':
+            gameState.votes = {};
+            gameState.players.forEach(p => p.voted = false);
+            saveGameState();
+            showNotification(`Vote tied between ${data.tiedPlayerNames.join(' and ')}! Voting again...`, 'error');
+            showDeliberationScreen();
+            break;
+
+        case 'murderTimerStarted':
+            startMurderTimer(data.murderEnabledAt);
+            break;
+
         case 'deliberationCancelled':
             gameState.phase = 'playing';
             gameState.votes = {};
@@ -535,8 +539,12 @@ function handleMessage(data, conn) {
             
             gameState.murderVotes = {};
             gameState.murderEnabled = false;
+            if (murderTimerId) {
+                clearTimeout(murderTimerId);
+                murderTimerId = null;
+            }
             document.getElementById('btnRevealMurder').classList.add('hidden');
-            
+
             saveGameState();
             showNotification(`${data.playerName} was MURDERED by the traitors!`, 'error');
             updateGameScreen();
@@ -831,11 +839,23 @@ function eliminatePlayer() {
     });
     
     if (tied.length > 1) {
-        showNotification('Vote tied! Voting again...', 'error');
+        const tiedNames = tied.map(id => {
+            const p = gameState.players.find(pl => pl.id === id);
+            return p ? p.name : 'Unknown';
+        });
+
+        // Broadcast tie to all players so they know to re-vote
+        broadcastToAll({
+            type: 'voteTied',
+            tiedPlayerNames: tiedNames
+        });
+
+        showNotification(`Vote tied between ${tiedNames.join(' and ')}! Voting again...`, 'error');
         gameState.votes = {};
         gameState.players.forEach(p => p.voted = false);
         saveGameState();
         updateVoteStatus();
+        showDeliberationScreen();
         return;
     }
     
@@ -863,10 +883,18 @@ function eliminatePlayer() {
     
     showNotification(`${eliminated.name} was eliminated! They were ${eliminated.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`,
                     eliminated.role === 'traitor' ? 'success' : 'error');
-    
+
     showScreen('gameScreen');
     updateGameScreen();
     checkGameOver();
+
+    // Start murder timer (10 minutes from elimination)
+    const murderEnabledAt = Date.now() + 10 * 60 * 1000;
+    broadcastToAll({
+        type: 'murderTimerStarted',
+        murderEnabledAt: murderEnabledAt
+    });
+    startMurderTimer(murderEnabledAt);
 }
 
 function manualEliminatePlayer() {
@@ -911,10 +939,18 @@ function manualEliminatePlayer() {
     
     showNotification(`${eliminated.name} was eliminated! They were ${eliminated.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`,
                     eliminated.role === 'traitor' ? 'success' : 'error');
-    
+
     showScreen('gameScreen');
     updateGameScreen();
     checkGameOver();
+
+    // Start murder timer (10 minutes from elimination)
+    const murderEnabledAt = Date.now() + 10 * 60 * 1000;
+    broadcastToAll({
+        type: 'murderTimerStarted',
+        murderEnabledAt: murderEnabledAt
+    });
+    startMurderTimer(murderEnabledAt);
 }
 
 function cancelDeliberation() {
@@ -933,6 +969,42 @@ function cancelDeliberation() {
     
     showScreen('gameScreen');
     updateGameScreen();
+}
+
+function startMurderTimer(murderEnabledAt) {
+    // Clear any existing murder timer
+    if (murderTimerId) {
+        clearTimeout(murderTimerId);
+        murderTimerId = null;
+    }
+
+    const delay = murderEnabledAt - Date.now();
+    const enableTime = new Date(murderEnabledAt);
+    const timeStr = enableTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Notify all players about the murder window
+    showNotification(`Traitors may commit a murder from ${timeStr}`, 'error');
+
+    if (delay <= 0) {
+        // Already past the time
+        gameState.murderEnabled = true;
+        saveGameState();
+        if (gameState.role === 'traitor' && gameState.phase === 'playing') {
+            document.getElementById('btnMurderVote').classList.remove('hidden');
+            showNotification('You can now vote to murder an agent!', 'success');
+        }
+        return;
+    }
+
+    murderTimerId = setTimeout(() => {
+        murderTimerId = null;
+        gameState.murderEnabled = true;
+        saveGameState();
+        if (gameState.role === 'traitor' && gameState.phase === 'playing') {
+            document.getElementById('btnMurderVote').classList.remove('hidden');
+            showNotification('You can now vote to murder an agent!', 'success');
+        }
+    }, delay);
 }
 
 function updateMurderVoteScreen() {
@@ -1042,10 +1114,14 @@ function revealMurder() {
     
     gameState.murderVotes = {};
     gameState.murderEnabled = false;
+    if (murderTimerId) {
+        clearTimeout(murderTimerId);
+        murderTimerId = null;
+    }
     document.getElementById('btnRevealMurder').classList.add('hidden');
-    
+
     saveGameState();
-    
+
     showNotification(`${murdered.name} was MURDERED by the traitors!`, 'error');
     updateGameScreen();
     checkGameOver();
@@ -1304,7 +1380,11 @@ function leaveGame() {
 function resetGame() {
     if (peer) peer.destroy();
     connections = {};
-    
+    if (murderTimerId) {
+        clearTimeout(murderTimerId);
+        murderTimerId = null;
+    }
+
     gameState.gameCode = '';
     gameState.isHost = false;
     gameState.role = null;
