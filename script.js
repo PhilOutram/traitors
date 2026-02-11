@@ -25,6 +25,7 @@ let murderTimerId = null;
 // Audio
 let bgMusic;
 let musicTimeout = null;
+let soundMuted = false;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
@@ -47,6 +48,21 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function setupEventListeners() {
+    // Sound toggle button
+    document.getElementById('soundToggle').addEventListener('click', () => {
+        soundMuted = !soundMuted;
+        document.getElementById('soundOnIcon').classList.toggle('hidden', soundMuted);
+        document.getElementById('soundOffIcon').classList.toggle('hidden', !soundMuted);
+        if (soundMuted && bgMusic) {
+            bgMusic.pause();
+            bgMusic.currentTime = 0;
+            if (musicTimeout) {
+                clearTimeout(musicTimeout);
+                musicTimeout = null;
+            }
+        }
+    });
+
     // Help button
     document.getElementById('helpButton').addEventListener('click', () => {
         showScreen('helpScreen');
@@ -129,6 +145,11 @@ function setupEventListeners() {
         showScreen('nameScreen');
     });
     
+    // Clear old game code when clicking on the input
+    document.getElementById('gameCodeInput').addEventListener('focus', (e) => {
+        e.target.value = '';
+    });
+
     // Auto-uppercase game code input
     document.getElementById('gameCodeInput').addEventListener('input', (e) => {
         e.target.value = e.target.value.toUpperCase();
@@ -1453,12 +1474,12 @@ function showLoading(show) {
 }
 
 function playMusicOnEvent() {
-    if (bgMusic) {
+    if (bgMusic && !soundMuted) {
         // Stop any existing timeout
         if (musicTimeout) {
             clearTimeout(musicTimeout);
         }
-        
+
         // Play the music
         bgMusic.currentTime = 0;
         bgMusic.play().catch(e => console.log('Music play failed:', e));

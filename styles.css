@@ -698,6 +698,35 @@ h3 {
     margin-top: -2px;
 }
 
+/* Sound Toggle Button */
+.sound-toggle-button {
+    position: fixed;
+    top: 10px;
+    left: 62px;
+    width: 44px;
+    height: 44px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1001;
+    transition: var(--transition);
+    color: white;
+    padding: 0;
+}
+
+.sound-toggle-button:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.6);
+}
+
+.sound-toggle-button .hidden {
+    display: none;
+}
+
 /* Emergency Reset Button */
 .emergency-reset {
     position: fixed;
