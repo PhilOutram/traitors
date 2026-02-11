@@ -246,73 +246,94 @@ function joinGame(code) {
                 showNotification('Connection timeout. Host may not be available.', 'error');
                 showScreen('joinGameScreen');
             }
-        }, 10000); // 10 second timeout
+        }, 20000); // 20 second timeout
     });
 }
 
-function initializePeer(id, callback) {
+function initializePeer(id, callback, _retryCount) {
+    const retryCount = _retryCount || 0;
+
+    function createPeer() {
+        console.log('Initializing peer with ID:', id);
+
+        peer = new Peer(id, {
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' }
+                ]
+            },
+            debug: 2 // Enable debug logging
+        });
+
+        peer.on('open', (peerId) => {
+            console.log('Peer connection opened. My ID:', peerId);
+            if (callback) callback();
+        });
+
+        peer.on('connection', (conn) => {
+            console.log('Incoming connection from:', conn.peer);
+            connections[conn.peer] = conn;
+
+            conn.on('data', (data) => handleMessage(data, conn));
+
+            conn.on('close', () => {
+                console.log('Connection closed:', conn.peer);
+                delete connections[conn.peer];
+                handlePlayerDisconnect(conn.peer);
+            });
+
+            conn.on('error', (err) => {
+                console.error('Connection error with peer:', conn.peer, err);
+            });
+        });
+
+        peer.on('error', (err) => {
+            console.error('Peer error:', err);
+
+            // Auto-retry with a new ID if our peer ID is still held by the signaling server
+            if (err.type === 'unavailable-id' && retryCount < 3) {
+                console.log('Peer ID unavailable, retrying with new ID... (attempt ' + (retryCount + 1) + ')');
+                peer.destroy();
+                peer = null;
+                const newId = generateId();
+                initializePeer(newId, callback, retryCount + 1);
+                return;
+            }
+
+            // More specific error messages
+            if (err.type === 'peer-unavailable') {
+                showNotification('Host not found. Check the game code.', 'error');
+            } else if (err.type === 'unavailable-id') {
+                showNotification('Connection conflict. Please try again.', 'error');
+            } else if (err.type === 'network') {
+                showNotification('Network error. Check your connection.', 'error');
+            } else if (err.type === 'server-error') {
+                showNotification('PeerJS server error. Please try again.', 'error');
+            } else {
+                showNotification('Connection error. Please try again.', 'error');
+            }
+
+            showLoading(false);
+        });
+
+        peer.on('disconnected', () => {
+            console.log('Peer disconnected from signaling server');
+            // Attempt to reconnect
+            if (!peer.destroyed) {
+                peer.reconnect();
+            }
+        });
+    }
+
     if (peer) {
         peer.destroy();
+        peer = null;
+        // Wait for PeerJS signaling server to release the old ID
+        setTimeout(createPeer, 500);
+    } else {
+        createPeer();
     }
-    
-    console.log('Initializing peer with ID:', id);
-    
-    peer = new Peer(id, {
-        config: {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        },
-        debug: 2 // Enable debug logging
-    });
-    
-    peer.on('open', (peerId) => {
-        console.log('Peer connection opened. My ID:', peerId);
-        if (callback) callback();
-    });
-    
-    peer.on('connection', (conn) => {
-        console.log('Incoming connection from:', conn.peer);
-        connections[conn.peer] = conn;
-        
-        conn.on('data', (data) => handleMessage(data, conn));
-        
-        conn.on('close', () => {
-            console.log('Connection closed:', conn.peer);
-            delete connections[conn.peer];
-            handlePlayerDisconnect(conn.peer);
-        });
-        
-        conn.on('error', (err) => {
-            console.error('Connection error with peer:', conn.peer, err);
-        });
-    });
-    
-    peer.on('error', (err) => {
-        console.error('Peer error:', err);
-        
-        // More specific error messages
-        if (err.type === 'peer-unavailable') {
-            showNotification('Host not found. Check the game code.', 'error');
-        } else if (err.type === 'network') {
-            showNotification('Network error. Check your connection.', 'error');
-        } else if (err.type === 'server-error') {
-            showNotification('PeerJS server error. Please try again.', 'error');
-        } else {
-            showNotification('Connection error. Please try again.', 'error');
-        }
-        
-        showLoading(false);
-    });
-    
-    peer.on('disconnected', () => {
-        console.log('Peer disconnected from signaling server');
-        // Attempt to reconnect
-        if (!peer.destroyed) {
-            peer.reconnect();
-        }
-    });
 }
 
 function handleMessage(data, conn) {
