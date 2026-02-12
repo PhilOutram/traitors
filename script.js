@@ -1303,13 +1303,18 @@ function updateMurderVoteStatus() {
     `;
 
     if (votedCount === aliveTraitors.length) {
+        // Host auto-reveals the murder after a short delay
         if (gameState.isHost) {
-            document.getElementById('btnRevealMurder').classList.remove('hidden');
+            setTimeout(() => {
+                if (gameState.murderEnabled && Object.keys(gameState.murderVotes).length >= aliveTraitors.length) {
+                    revealMurder();
+                }
+            }, 3000);
         }
 
-        // Only auto-navigate away if the current player has already voted
+        // Navigate traitor players back to game screen while they wait
         if (myVote) {
-            showNotification('All traitors have voted! Waiting for host to reveal murder...', 'success');
+            showNotification('All traitors have voted! Murder will be revealed shortly...', 'success');
             setTimeout(() => {
                 showScreen('gameScreen');
                 updateGameScreen();
