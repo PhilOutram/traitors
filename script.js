@@ -22,6 +22,10 @@ let peer = null;
 let connections = {};
 let isConnecting = false;
 
+// Screen tracking (for help button return)
+let currentScreen = 'welcomeScreen';
+let previousScreen = 'welcomeScreen';
+
 // Murder timer
 let murderTimerId = null;
 
@@ -68,15 +72,16 @@ function setupEventListeners() {
 
     // Help button
     document.getElementById('helpButton').addEventListener('click', () => {
+        previousScreen = currentScreen || 'welcomeScreen';
         showScreen('helpScreen');
     });
-    
+
     document.getElementById('btnCloseHelp').addEventListener('click', () => {
-        showScreen('welcomeScreen');
+        showScreen(previousScreen || 'welcomeScreen');
     });
-    
+
     document.getElementById('btnCloseHelpBottom').addEventListener('click', () => {
-        showScreen('welcomeScreen');
+        showScreen(previousScreen || 'welcomeScreen');
     });
     
     // Reconnect dialog buttons
@@ -1554,9 +1559,14 @@ function generateId() {
 }
 
 function showScreen(screenId) {
+    // Track current screen (but not the help screen itself)
+    if (screenId !== 'helpScreen') {
+        currentScreen = screenId;
+    }
+
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById(screenId).classList.add('active');
-    
+
     // Show/hide emergency reset button
     const resetBtn = document.getElementById('emergencyReset');
     if (screenId === 'welcomeScreen' || screenId === 'helpScreen') {
@@ -1564,13 +1574,13 @@ function showScreen(screenId) {
     } else {
         resetBtn.classList.remove('hidden');
     }
-    
-    // Show/hide help button (only on welcome and name screens)
+
+    // Show help button on all screens except the help screen itself
     const helpBtn = document.getElementById('helpButton');
-    if (screenId === 'welcomeScreen' || screenId === 'nameScreen') {
-        helpBtn.classList.remove('hidden');
-    } else {
+    if (screenId === 'helpScreen') {
         helpBtn.classList.add('hidden');
+    } else {
+        helpBtn.classList.remove('hidden');
     }
 }
 
