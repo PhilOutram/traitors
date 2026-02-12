@@ -25,6 +25,9 @@ let isConnecting = false;
 // Debug mode
 let debugMode = false;
 
+// Host manual elimination selection (separate from voting)
+let hostManualSelection = null;
+
 // Screen tracking (for help button return)
 let currentScreen = 'welcomeScreen';
 let previousScreen = 'welcomeScreen';
@@ -831,6 +834,7 @@ function showRoleReveal() {
 function callDeliberation() {
     gameState.phase = 'deliberation';
     gameState.votes = {};
+    hostManualSelection = null;
     gameState.deliberationStartTime = Date.now();
     gameState.players.forEach(p => p.voted = false);
     
@@ -890,16 +894,20 @@ function showDeliberationScreen() {
     const votingPlayers = document.getElementById('votingPlayers');
     const alivePlayers = gameState.players.filter(p => !p.eliminated);
     const meEliminated = gameState.players.find(p => p.id === gameState.playerId)?.eliminated;
+    const disableButtons = meEliminated && !gameState.isHost;
 
     votingPlayers.innerHTML = alivePlayers.map(p => `
-        <button class="vote-button" data-player-id="${p.id}" ${meEliminated ? 'disabled' : ''}>
+        <button class="vote-button" data-player-id="${p.id}" ${disableButtons ? 'disabled' : ''}>
             ${p.name}${p.id === gameState.playerId ? ' (You)' : ''}
         </button>
     `).join('');
 
-    if (meEliminated) {
+    if (meEliminated && !gameState.isHost) {
         votingPlayers.insertAdjacentHTML('beforeend',
             '<p style="color: #ff6b6b; margin-top: 10px;">You have been eliminated and cannot vote.</p>');
+    } else if (meEliminated && gameState.isHost) {
+        votingPlayers.insertAdjacentHTML('beforeend',
+            '<p style="color: #f59e0b; margin-top: 10px;">You are eliminated but can still select a player for manual elimination.</p>');
     }
 
     // Add click listeners
@@ -907,9 +915,11 @@ function showDeliberationScreen() {
         btn.addEventListener('click', () => voteForPlayer(btn.dataset.playerId));
     });
 
-    // Show host actions if host
+    // Show host actions only for host
     if (gameState.isHost) {
         document.getElementById('hostDeliberationActions').classList.remove('hidden');
+    } else {
+        document.getElementById('hostDeliberationActions').classList.add('hidden');
     }
 
     updateVoteStatus();
@@ -917,9 +927,17 @@ function showDeliberationScreen() {
 }
 
 function voteForPlayer(targetId) {
-    // Eliminated players cannot vote
     const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+
+    // If host is eliminated, they can still select a player for manual elimination
     if (myPlayer && myPlayer.eliminated) {
+        if (gameState.isHost) {
+            hostManualSelection = targetId;
+            document.querySelectorAll('.vote-button').forEach(btn => btn.classList.remove('voted'));
+            document.querySelector(`[data-player-id="${targetId}"]`)?.classList.add('voted');
+            document.getElementById('btnManualEliminate').disabled = false;
+            return;
+        }
         showNotification('You have been eliminated and cannot vote!', 'error');
         return;
     }
@@ -927,6 +945,11 @@ function voteForPlayer(targetId) {
     if (targetId === gameState.playerId && !gameState.isHost) {
         showNotification('You cannot vote for yourself!', 'error');
         return;
+    }
+
+    // Track host selection for manual eliminate
+    if (gameState.isHost) {
+        hostManualSelection = targetId;
     }
     
     gameState.votes[gameState.playerId] = targetId;
@@ -1051,15 +1074,14 @@ function eliminatePlayer() {
 
 function manualEliminatePlayer() {
     if (!gameState.isHost) return;
-    
+
     // Check if host has selected a player
-    const hostVote = gameState.votes[gameState.playerId];
-    if (!hostVote) {
+    if (!hostManualSelection) {
         showNotification('Please select a player first by clicking their button above', 'error');
         return;
     }
-    
-    const eliminated = gameState.players.find(p => p.id === hostVote);
+
+    const eliminated = gameState.players.find(p => p.id === hostManualSelection);
     if (!eliminated || eliminated.eliminated) {
         showNotification('Invalid player selection', 'error');
         return;
@@ -1261,22 +1283,38 @@ function updateMurderVoteStatus() {
     const murderVoteStatus = document.getElementById('murderVoteStatus');
     const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
     const votedCount = Object.keys(gameState.murderVotes).length;
-    
+    const myVote = gameState.murderVotes[gameState.playerId];
+
+    // Show each traitor's vote to fellow traitors
+    let voteDetails = '';
+    aliveTraitors.forEach(t => {
+        const vote = gameState.murderVotes[t.id];
+        if (vote) {
+            const targetName = gameState.players.find(p => p.id === vote)?.name || 'Unknown';
+            voteDetails += `<p style="font-size: 0.9em; opacity: 0.8;">${t.isBot ? '🤖 ' : ''}${t.name} → ${targetName}</p>`;
+        } else {
+            voteDetails += `<p style="font-size: 0.9em; opacity: 0.5;">${t.isBot ? '🤖 ' : ''}${t.name} — waiting...</p>`;
+        }
+    });
+
     murderVoteStatus.innerHTML = `
         <p>Traitor Votes: ${votedCount} / ${aliveTraitors.length}</p>
+        ${voteDetails}
     `;
-    
+
     if (votedCount === aliveTraitors.length) {
-        showNotification('All traitors have voted! Waiting for host to reveal murder...', 'success');
-        
         if (gameState.isHost) {
             document.getElementById('btnRevealMurder').classList.remove('hidden');
         }
-        
-        setTimeout(() => {
-            showScreen('gameScreen');
-            updateGameScreen();
-        }, 2000);
+
+        // Only auto-navigate away if the current player has already voted
+        if (myVote) {
+            showNotification('All traitors have voted! Waiting for host to reveal murder...', 'success');
+            setTimeout(() => {
+                showScreen('gameScreen');
+                updateGameScreen();
+            }, 2000);
+        }
     }
 }
 
@@ -1463,6 +1501,8 @@ function updateGameScreen() {
     // Show/hide action buttons
     if (gameState.isHost) {
         document.getElementById('hostActions').classList.remove('hidden');
+    } else {
+        document.getElementById('hostActions').classList.add('hidden');
     }
     
     if (gameState.role === 'traitor' && gameState.murderEnabled) {
@@ -1474,7 +1514,7 @@ function updateGameScreen() {
 function updateTraitorOptions() {
     const numTraitors = document.getElementById('numTraitors');
     const playerCount = gameState.players.length;
-    const maxTraitors = Math.floor(playerCount / 2) - 1;
+    const maxTraitors = Math.floor(playerCount / 2);
     
     numTraitors.innerHTML = '';
     for (let i = 1; i <= Math.max(1, maxTraitors); i++) {

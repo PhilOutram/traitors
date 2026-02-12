@@ -73,3 +73,5 @@ Game state is saved to `localStorage` (key: `traitorsGameState`) on every state 
 ## Styling (`styles.css`)
 
 Mobile-first responsive design using CSS Grid and Flexbox. No CSS preprocessor or framework.
+
+After every change, please update the version number in the html file.
