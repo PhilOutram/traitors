@@ -334,6 +334,38 @@ h3 {
     box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
 }
 
+/* Elimination Reveal */
+.elimination-reveal-card {
+    padding: var(--spacing-xl);
+    border-radius: var(--border-radius);
+    margin: var(--spacing-lg) 0;
+    text-align: center;
+}
+
+.elimination-reveal-card.agent {
+    background: linear-gradient(135deg, rgba(0, 255, 0, 0.1), rgba(0, 200, 0, 0.1));
+    border: 3px solid var(--color-agent);
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+}
+
+.elimination-reveal-card.traitor {
+    background: linear-gradient(135deg, rgba(255, 0, 0, 0.1), rgba(200, 0, 0, 0.1));
+    border: 3px solid var(--color-traitor);
+    box-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
+}
+
+.elimination-reveal-name {
+    font-size: 2em;
+    font-weight: bold;
+    margin-bottom: var(--spacing-md);
+}
+
+.elimination-reveal-role {
+    font-size: 1.5em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
 .role-image {
     max-width: 200px;
     width: 100%;

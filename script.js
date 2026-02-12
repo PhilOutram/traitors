@@ -177,6 +177,9 @@ function setupEventListeners() {
         updateGameScreen();
     });
 
+    // Elimination reveal continue
+    document.getElementById('btnContinueAfterElimination').addEventListener('click', continueAfterElimination);
+
     // Game actions
     document.getElementById('btnCallDeliberation').addEventListener('click', callDeliberation);
     document.getElementById('btnRevealMurder').addEventListener('click', revealMurder);
@@ -563,18 +566,15 @@ function handleMessage(data, conn) {
                 eliminated.eliminated = true;
                 eliminated.role = data.role; // Reveal role
             }
-            
+
             gameState.phase = 'playing';
             gameState.votes = {};
             gameState.players.forEach(p => p.voted = false);
-            
+
             saveGameState();
-            showNotification(`${data.playerName} was eliminated! They were ${data.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`, 
-                           data.role === 'traitor' ? 'success' : 'error');
-            
-            showScreen('gameScreen');
-            updateGameScreen();
-            checkGameOver();
+
+            // Show elimination reveal screen (continue button handles checkGameOver)
+            showEliminationReveal(data.playerName, data.role);
             break;
 
         case 'voteTied':
@@ -810,6 +810,42 @@ function callDeliberation() {
     scheduleBotDeliberationVotes();
 }
 
+function showEliminationReveal(playerName, role) {
+    const card = document.getElementById('eliminationRevealCard');
+    const nameEl = document.getElementById('eliminationRevealName');
+    const roleEl = document.getElementById('eliminationRevealRole');
+
+    nameEl.textContent = playerName;
+    roleEl.textContent = role === 'agent' ? 'AGENT' : 'TRAITOR';
+    card.className = `elimination-reveal-card ${role}`;
+
+    // Play dramatic music
+    playMusicOnEvent();
+
+    showScreen('eliminationRevealScreen');
+}
+
+function continueAfterElimination() {
+    showScreen('gameScreen');
+    updateGameScreen();
+    checkGameOver();
+
+    // Start murder timer only if game is still going (host triggers for everyone)
+    if (gameState.isHost && gameState.phase !== 'gameOver') {
+        // Use shorter delay if all alive traitors are bots
+        const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
+        const allTraitorsAreBots = aliveTraitors.length > 0 && aliveTraitors.every(p => p.isBot);
+        const delay = allTraitorsAreBots ? 10 * 1000 : 10 * 60 * 1000;
+
+        const murderEnabledAt = Date.now() + delay;
+        broadcastToAll({
+            type: 'murderTimerStarted',
+            murderEnabledAt: murderEnabledAt
+        });
+        startMurderTimer(murderEnabledAt);
+    }
+}
+
 function showDeliberationScreen() {
     const votingPlayers = document.getElementById('votingPlayers');
     const alivePlayers = gameState.players.filter(p => !p.eliminated);
@@ -954,10 +990,7 @@ function eliminatePlayer() {
     if (!eliminated) return;
     
     eliminated.eliminated = true;
-    
-    // Play dramatic music on elimination
-    playMusicOnEvent();
-    
+
     // Broadcast elimination
     broadcastToAll({
         type: 'playerEliminated',
@@ -965,29 +998,15 @@ function eliminatePlayer() {
         playerName: eliminated.name,
         role: eliminated.role
     });
-    
+
     gameState.phase = 'playing';
     gameState.votes = {};
     gameState.players.forEach(p => p.voted = false);
-    
+
     saveGameState();
-    
-    showNotification(`${eliminated.name} was eliminated! They were ${eliminated.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`,
-                    eliminated.role === 'traitor' ? 'success' : 'error');
 
-    showScreen('gameScreen');
-    updateGameScreen();
-    checkGameOver();
-
-    // Start murder timer only if game is still going
-    if (gameState.phase !== 'gameOver') {
-        const murderEnabledAt = Date.now() + 10 * 60 * 1000;
-        broadcastToAll({
-            type: 'murderTimerStarted',
-            murderEnabledAt: murderEnabledAt
-        });
-        startMurderTimer(murderEnabledAt);
-    }
+    // Show elimination reveal screen (continue button handles checkGameOver + murder timer)
+    showEliminationReveal(eliminated.name, eliminated.role);
 }
 
 function manualEliminatePlayer() {
@@ -1012,10 +1031,7 @@ function manualEliminatePlayer() {
     }
     
     eliminated.eliminated = true;
-    
-    // Play dramatic music on elimination
-    playMusicOnEvent();
-    
+
     // Broadcast elimination
     broadcastToAll({
         type: 'playerEliminated',
@@ -1023,29 +1039,15 @@ function manualEliminatePlayer() {
         playerName: eliminated.name,
         role: eliminated.role
     });
-    
+
     gameState.phase = 'playing';
     gameState.votes = {};
     gameState.players.forEach(p => p.voted = false);
-    
+
     saveGameState();
-    
-    showNotification(`${eliminated.name} was eliminated! They were ${eliminated.role === 'agent' ? 'an AGENT' : 'a TRAITOR'}!`,
-                    eliminated.role === 'traitor' ? 'success' : 'error');
 
-    showScreen('gameScreen');
-    updateGameScreen();
-    checkGameOver();
-
-    // Start murder timer only if game is still going
-    if (gameState.phase !== 'gameOver') {
-        const murderEnabledAt = Date.now() + 10 * 60 * 1000;
-        broadcastToAll({
-            type: 'murderTimerStarted',
-            murderEnabledAt: murderEnabledAt
-        });
-        startMurderTimer(murderEnabledAt);
-    }
+    // Show elimination reveal screen (continue button handles checkGameOver + murder timer)
+    showEliminationReveal(eliminated.name, eliminated.role);
 }
 
 function cancelDeliberation() {
