@@ -22,6 +22,9 @@ let peer = null;
 let connections = {};
 let isConnecting = false;
 
+// Debug mode
+let debugMode = false;
+
 // Screen tracking (for help button return)
 let currentScreen = 'welcomeScreen';
 let previousScreen = 'welcomeScreen';
@@ -167,6 +170,7 @@ function setupEventListeners() {
     document.getElementById('btnStartGame').addEventListener('click', startGameAsHost);
     document.getElementById('btnCancelHost').addEventListener('click', cancelHosting);
     document.getElementById('btnAddBots').addEventListener('click', addBotPlayers);
+    document.getElementById('btnDebugToggle').addEventListener('click', toggleDebugMode);
 
     // Waiting room
     document.getElementById('btnLeaveGame').addEventListener('click', leaveGame);
@@ -230,6 +234,26 @@ function hostGame() {
     saveGameState();
 }
 
+function toggleDebugMode() {
+    if (gameState.phase !== 'lobby') return;
+
+    debugMode = !debugMode;
+    const btn = document.getElementById('btnDebugToggle');
+    const addBotsBtn = document.getElementById('btnAddBots');
+
+    if (debugMode) {
+        btn.classList.add('active');
+        addBotsBtn.classList.remove('hidden');
+        showNotification('Debug mode ON', 'success');
+    } else {
+        btn.classList.remove('active');
+        addBotsBtn.classList.add('hidden');
+        // Remove bots if they were added
+        removeBotPlayers();
+        showNotification('Debug mode OFF', 'error');
+    }
+}
+
 function addBotPlayers() {
     if (!gameState.isHost || gameState.phase !== 'lobby') return;
 
@@ -264,9 +288,25 @@ function addBotPlayers() {
     });
 
     showNotification('5 bot players added!', 'success');
+}
 
-    // Hide the button after adding bots
-    document.getElementById('btnAddBots').classList.add('hidden');
+function removeBotPlayers() {
+    if (!gameState.isHost || gameState.phase !== 'lobby') return;
+
+    const hadBots = gameState.players.some(p => p.isBot);
+    gameState.players = gameState.players.filter(p => !p.isBot);
+
+    if (hadBots) {
+        updateLobbyPlayers();
+        updateTraitorOptions();
+        saveGameState();
+
+        broadcastToAll({
+            type: 'playerJoined',
+            player: { name: 'Update' },
+            players: gameState.players
+        });
+    }
 }
 
 function joinGame(code) {
@@ -828,7 +868,7 @@ function showEliminationReveal(playerName, role) {
 function continueAfterElimination() {
     showScreen('gameScreen');
     updateGameScreen();
-    checkGameOver();
+    checkGameOver(true);
 
     // Start murder timer only if game is still going (host triggers for everyone)
     if (gameState.isHost && gameState.phase !== 'gameOver') {
@@ -884,7 +924,7 @@ function voteForPlayer(targetId) {
         return;
     }
 
-    if (targetId === gameState.playerId) {
+    if (targetId === gameState.playerId && !gameState.isHost) {
         showNotification('You cannot vote for yourself!', 'error');
         return;
     }
@@ -1301,15 +1341,18 @@ function revealMurder() {
     checkGameOver();
 }
 
-function checkGameOver() {
+function checkGameOver(afterDeliberation = false) {
     const aliveAgents = gameState.players.filter(p => !p.eliminated && p.role === 'agent').length;
     const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor').length;
-    
+
     let winner = null;
-    
+
     if (aliveTraitors === 0) {
         winner = 'agents';
     } else if (aliveAgents <= aliveTraitors) {
+        winner = 'traitors';
+    } else if (afterDeliberation && aliveAgents === aliveTraitors + 1) {
+        // After deliberation, traitors get a murder which would equalise numbers
         winner = 'traitors';
     }
     
@@ -1616,6 +1659,14 @@ function showScreen(screenId) {
         helpBtn.classList.add('hidden');
     } else {
         helpBtn.classList.remove('hidden');
+    }
+
+    // Show debug toggle only on host setup screen
+    const debugBtn = document.getElementById('btnDebugToggle');
+    if (screenId === 'hostSetupScreen') {
+        debugBtn.classList.remove('hidden');
+    } else {
+        debugBtn.classList.add('hidden');
     }
 }
 

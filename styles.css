@@ -770,6 +770,47 @@ h3 {
     display: none;
 }
 
+/* Debug Toggle Button */
+.debug-toggle-button.hidden {
+    display: none;
+}
+
+.debug-toggle-button {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    width: 44px;
+    height: 44px;
+    background: #1a1a2e;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1001;
+    transition: var(--transition);
+    padding: 0;
+    opacity: 0.5;
+}
+
+.debug-toggle-button.active {
+    background: #2d1b00;
+    border-color: #f59e0b;
+    opacity: 1;
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.4);
+}
+
+.debug-toggle-button:hover {
+    transform: scale(1.1);
+    opacity: 1;
+}
+
+.debug-icon {
+    font-size: 20px;
+    line-height: 1;
+}
+
 /* Emergency Reset Button */
 .emergency-reset {
     position: fixed;
