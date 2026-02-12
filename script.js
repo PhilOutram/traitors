@@ -172,7 +172,6 @@ function setupEventListeners() {
     // Host setup
     document.getElementById('btnStartGame').addEventListener('click', startGameAsHost);
     document.getElementById('btnCancelHost').addEventListener('click', cancelHosting);
-    document.getElementById('btnAddBots').addEventListener('click', addBotPlayers);
     document.getElementById('btnDebugToggle').addEventListener('click', toggleDebugMode);
 
     // Waiting room
@@ -242,18 +241,15 @@ function toggleDebugMode() {
 
     debugMode = !debugMode;
     const btn = document.getElementById('btnDebugToggle');
-    const addBotsBtn = document.getElementById('btnAddBots');
 
     if (debugMode) {
         btn.classList.add('active');
-        addBotsBtn.classList.remove('hidden');
-        showNotification('Debug mode ON', 'success');
+        addBotPlayers();
+        showNotification('Debug mode ON — 5 bots added', 'success');
     } else {
         btn.classList.remove('active');
-        addBotsBtn.classList.add('hidden');
-        // Remove bots if they were added
         removeBotPlayers();
-        showNotification('Debug mode OFF', 'error');
+        showNotification('Debug mode OFF — bots removed', 'error');
     }
 }
 
@@ -473,6 +469,7 @@ function handleMessage(data, conn) {
                 
                 gameState.players.push(newPlayer);
                 updateLobbyPlayers();
+                updateTraitorOptions();
                 saveGameState();
                 
                 // Send current game state to new player
@@ -879,7 +876,7 @@ function continueAfterElimination() {
         // 30 second delay before traitors can murder (10s if all traitors are bots)
         const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
         const allTraitorsAreBots = aliveTraitors.length > 0 && aliveTraitors.every(p => p.isBot);
-        const delay = allTraitorsAreBots ? 10 * 1000 : 30 * 1000;
+        const delay = allTraitorsAreBots ? 5 * 1000 : 30 * 1000;
 
         const murderEnabledAt = Date.now() + delay;
         broadcastToAll({
@@ -1179,8 +1176,8 @@ function scheduleBotDeliberationVotes() {
     const aliveBots = gameState.players.filter(p => !p.eliminated && p.isBot);
     const alivePlayers = gameState.players.filter(p => !p.eliminated);
 
-    aliveBots.forEach(bot => {
-        const delay = 1000 + Math.random() * 2000; // 1-3 seconds
+    aliveBots.forEach((bot, index) => {
+        const delay = 500 + Math.random() * 1500; // 0.5-2 seconds
         setTimeout(() => {
             if (gameState.phase !== 'deliberation') return;
             if (bot.eliminated) return;
@@ -1219,8 +1216,8 @@ function scheduleBotMurderVotes() {
 
     if (aliveAgents.length === 0) return;
 
-    aliveBotTraitors.forEach(bot => {
-        const delay = 1000 + Math.random() * 2000; // 1-3 seconds
+    aliveBotTraitors.forEach((bot, index) => {
+        const delay = 500 + Math.random() * 1500; // 0.5-2 seconds
         setTimeout(() => {
             if (!gameState.murderEnabled || gameState.phase !== 'playing') return;
             if (bot.eliminated) return;
@@ -1515,13 +1512,15 @@ function updateGameScreen() {
         `;
     }).join('');
     
-    // Show/hide action buttons
+    // Show/hide action buttons — always hide first, then selectively show
+    document.getElementById('hostActions').classList.add('hidden');
+    document.getElementById('traitorActions').classList.add('hidden');
+    document.getElementById('btnMurderVote').classList.add('hidden');
+
     if (gameState.isHost) {
         document.getElementById('hostActions').classList.remove('hidden');
-    } else {
-        document.getElementById('hostActions').classList.add('hidden');
     }
-    
+
     if (gameState.role === 'traitor' && gameState.murderEnabled) {
         document.getElementById('traitorActions').classList.remove('hidden');
         document.getElementById('btnMurderVote').classList.remove('hidden');
