@@ -832,10 +832,10 @@ function continueAfterElimination() {
 
     // Start murder timer only if game is still going (host triggers for everyone)
     if (gameState.isHost && gameState.phase !== 'gameOver') {
-        // Use shorter delay if all alive traitors are bots
+        // 30 second delay before traitors can murder (10s if all traitors are bots)
         const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
         const allTraitorsAreBots = aliveTraitors.length > 0 && aliveTraitors.every(p => p.isBot);
-        const delay = allTraitorsAreBots ? 10 * 1000 : 10 * 60 * 1000;
+        const delay = allTraitorsAreBots ? 10 * 1000 : 30 * 1000;
 
         const murderEnabledAt = Date.now() + delay;
         broadcastToAll({
@@ -1079,19 +1079,19 @@ function startMurderTimer(murderEnabledAt) {
     }
 
     const delay = murderEnabledAt - Date.now();
-    const enableTime = new Date(murderEnabledAt);
-    const timeStr = enableTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const delaySeconds = Math.max(0, Math.round(delay / 1000));
 
-    // Notify all players about the murder window
-    showNotification(`Traitors may commit a murder from ${timeStr}`, 'error');
+    // Notify all players about the upcoming murder window
+    showNotification(`⚠️ Traitors may commit a murder any time from ${delaySeconds} seconds!`, 'error');
 
     if (delay <= 0) {
         // Already past the time
         gameState.murderEnabled = true;
         saveGameState();
         if (gameState.role === 'traitor' && gameState.phase === 'playing') {
+            document.getElementById('traitorActions').classList.remove('hidden');
             document.getElementById('btnMurderVote').classList.remove('hidden');
-            showNotification('You can now vote to murder an agent!', 'success');
+            showNotification('🗡️ You can now vote to murder an agent!', 'success');
         }
         scheduleBotMurderVotes();
         return;
@@ -1102,8 +1102,9 @@ function startMurderTimer(murderEnabledAt) {
         gameState.murderEnabled = true;
         saveGameState();
         if (gameState.role === 'traitor' && gameState.phase === 'playing') {
+            document.getElementById('traitorActions').classList.remove('hidden');
             document.getElementById('btnMurderVote').classList.remove('hidden');
-            showNotification('You can now vote to murder an agent!', 'success');
+            showNotification('🗡️ You can now vote to murder an agent!', 'success');
         }
         scheduleBotMurderVotes();
     }, delay);

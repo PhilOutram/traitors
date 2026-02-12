@@ -219,12 +219,18 @@ h3 {
     width: 100%;
     padding: var(--spacing-md);
     font-size: 1.1rem;
-    background: rgba(255, 255, 255, 0.05);
+    background: #1a1a2e;
     color: var(--color-text);
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--border-radius);
     margin: var(--spacing-sm) 0;
     transition: var(--transition);
+    color-scheme: dark;
+}
+
+.select-input option {
+    background: #1a1a2e;
+    color: var(--color-text);
 }
 
 .text-input:focus,
