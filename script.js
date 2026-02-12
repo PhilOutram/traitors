@@ -1,3 +1,6 @@
+// Bot Names (Debug)
+const BOT_NAMES = ['Bot Alice', 'Bot Bob', 'Bot Carol', 'Bot Dave', 'Bot Eve'];
+
 // Game State
 const gameState = {
     playerName: '',
@@ -158,6 +161,7 @@ function setupEventListeners() {
     // Host setup
     document.getElementById('btnStartGame').addEventListener('click', startGameAsHost);
     document.getElementById('btnCancelHost').addEventListener('click', cancelHosting);
+    document.getElementById('btnAddBots').addEventListener('click', addBotPlayers);
 
     // Waiting room
     document.getElementById('btnLeaveGame').addEventListener('click', leaveGame);
@@ -213,9 +217,48 @@ function hostGame() {
     document.getElementById('gameCodeDisplay').textContent = gameState.gameCode;
     updateLobbyPlayers();
     updateTraitorOptions();
-    
+
     showScreen('hostSetupScreen');
     saveGameState();
+}
+
+function addBotPlayers() {
+    if (!gameState.isHost || gameState.phase !== 'lobby') return;
+
+    // Prevent adding bots twice
+    if (gameState.players.some(p => p.isBot)) {
+        showNotification('Bots already added!', 'error');
+        return;
+    }
+
+    BOT_NAMES.forEach(name => {
+        gameState.players.push({
+            id: 'bot-' + generateId(),
+            name: name,
+            role: null,
+            eliminated: false,
+            voted: false,
+            isHost: false,
+            isBot: true,
+            connectionId: null
+        });
+    });
+
+    updateLobbyPlayers();
+    updateTraitorOptions();
+    saveGameState();
+
+    // Broadcast updated player list to connected real players
+    broadcastToAll({
+        type: 'playerJoined',
+        player: { name: 'Bots' },
+        players: gameState.players
+    });
+
+    showNotification('5 bot players added!', 'success');
+
+    // Hide the button after adding bots
+    document.getElementById('btnAddBots').classList.add('hidden');
 }
 
 function joinGame(code) {
@@ -752,8 +795,11 @@ function callDeliberation() {
         type: 'deliberationStart',
         startTime: gameState.deliberationStartTime
     });
-    
+
     showDeliberationScreen();
+
+    // Schedule bot votes
+    scheduleBotDeliberationVotes();
 }
 
 function showDeliberationScreen() {
@@ -877,6 +923,9 @@ function eliminatePlayer() {
         saveGameState();
         updateVoteStatus();
         showDeliberationScreen();
+
+        // Schedule bot re-votes
+        scheduleBotDeliberationVotes();
         return;
     }
     
@@ -1014,6 +1063,7 @@ function startMurderTimer(murderEnabledAt) {
             document.getElementById('btnMurderVote').classList.remove('hidden');
             showNotification('You can now vote to murder an agent!', 'success');
         }
+        scheduleBotMurderVotes();
         return;
     }
 
@@ -1025,7 +1075,78 @@ function startMurderTimer(murderEnabledAt) {
             document.getElementById('btnMurderVote').classList.remove('hidden');
             showNotification('You can now vote to murder an agent!', 'success');
         }
+        scheduleBotMurderVotes();
     }, delay);
+}
+
+// Bot Voting Functions
+function scheduleBotDeliberationVotes() {
+    if (!gameState.isHost) return;
+
+    const aliveBots = gameState.players.filter(p => !p.eliminated && p.isBot);
+    const alivePlayers = gameState.players.filter(p => !p.eliminated);
+
+    aliveBots.forEach(bot => {
+        const delay = 1000 + Math.random() * 2000; // 1-3 seconds
+        setTimeout(() => {
+            if (gameState.phase !== 'deliberation') return;
+            if (bot.eliminated) return;
+            if (gameState.votes[bot.id]) return;
+
+            // Pick a random alive non-self player
+            const targets = alivePlayers.filter(p => p.id !== bot.id && !p.eliminated);
+            if (targets.length === 0) return;
+            const target = targets[Math.floor(Math.random() * targets.length)];
+
+            gameState.votes[bot.id] = target.id;
+            bot.voted = true;
+            saveGameState();
+
+            // Broadcast so real players' UI updates
+            broadcastToAll({
+                type: 'vote',
+                voterId: bot.id,
+                targetId: target.id
+            });
+
+            updateVoteStatus();
+        }, delay);
+    });
+}
+
+function scheduleBotMurderVotes() {
+    if (!gameState.isHost) return;
+
+    const aliveBotTraitors = gameState.players.filter(
+        p => !p.eliminated && p.isBot && p.role === 'traitor'
+    );
+    const aliveAgents = gameState.players.filter(
+        p => !p.eliminated && p.role === 'agent'
+    );
+
+    if (aliveAgents.length === 0) return;
+
+    aliveBotTraitors.forEach(bot => {
+        const delay = 1000 + Math.random() * 2000; // 1-3 seconds
+        setTimeout(() => {
+            if (!gameState.murderEnabled || gameState.phase !== 'playing') return;
+            if (bot.eliminated) return;
+            if (gameState.murderVotes[bot.id]) return;
+
+            const target = aliveAgents[Math.floor(Math.random() * aliveAgents.length)];
+
+            gameState.murderVotes[bot.id] = target.id;
+            saveGameState();
+
+            broadcastToAll({
+                type: 'murderVote',
+                voterId: bot.id,
+                targetId: target.id
+            });
+
+            updateMurderVoteStatus();
+        }, delay);
+    });
 }
 
 function updateMurderVoteScreen() {
@@ -1196,7 +1317,7 @@ function showGameOver(winner) {
     
     finalRolesList.innerHTML = gameState.players.map(p => `
         <div class="role-item ${p.role}">
-            <span>${p.name}</span>
+            <span>${p.isBot ? '🤖 ' : ''}${p.name}</span>
             <span class="role-badge ${p.role}">${p.role.toUpperCase()}</span>
         </div>
     `).join('');
@@ -1208,8 +1329,8 @@ function showGameOver(winner) {
 function updateLobbyPlayers() {
     const lobbyPlayers = document.getElementById('lobbyPlayers');
     lobbyPlayers.innerHTML = gameState.players.map(p => `
-        <div class="player-chip ${p.isHost ? 'host' : ''}">
-            ${p.name}${p.isHost ? ' 👑' : ''}
+        <div class="player-chip ${p.isHost ? 'host' : ''} ${p.isBot ? 'bot' : ''}">
+            ${p.isBot ? '🤖 ' : ''}${p.name}${p.isHost ? ' 👑' : ''}
         </div>
     `).join('');
     
@@ -1229,8 +1350,8 @@ function updateLobbyPlayers() {
 function updateWaitingPlayers() {
     const waitingPlayers = document.getElementById('waitingPlayers');
     waitingPlayers.innerHTML = gameState.players.map(p => `
-        <div class="player-chip ${p.isHost ? 'host' : ''}">
-            ${p.name}${p.isHost ? ' 👑' : ''}
+        <div class="player-chip ${p.isHost ? 'host' : ''} ${p.isBot ? 'bot' : ''}">
+            ${p.isBot ? '🤖 ' : ''}${p.name}${p.isHost ? ' 👑' : ''}
         </div>
     `).join('');
 }
@@ -1249,7 +1370,7 @@ function updateGameScreen() {
         
         return `
             <div class="player-card ${p.eliminated ? 'eliminated' : 'alive'} ${isMe ? 'you' : ''}">
-                <div class="player-name">${p.name}${isMe ? ' (You)' : ''}</div>
+                <div class="player-name">${p.isBot ? '🤖 ' : ''}${p.name}${isMe ? ' (You)' : ''}</div>
                 ${showRole ? `<div class="player-status ${p.eliminated ? 'dead' : ''}">${p.role ? p.role.toUpperCase() : ''}</div>` : ''}
                 ${p.eliminated ? '<div class="player-status dead">ELIMINATED</div>' : ''}
             </div>
