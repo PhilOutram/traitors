@@ -604,6 +604,7 @@ function handleMessage(data, conn) {
             const murdered = gameState.players.find(p => p.id === data.playerId);
             if (murdered) {
                 murdered.eliminated = true;
+                murdered.murdered = true;
             }
             
             gameState.murderVotes = {};
@@ -623,11 +624,13 @@ function handleMessage(data, conn) {
         case 'gameOver':
             gameState.phase = 'gameOver';
             
-            // Reveal all roles
+            // Reveal all roles and final status
             data.players.forEach(serverPlayer => {
                 const localPlayer = gameState.players.find(p => p.id === serverPlayer.id);
                 if (localPlayer) {
                     localPlayer.role = serverPlayer.role;
+                    localPlayer.eliminated = serverPlayer.eliminated;
+                    localPlayer.murdered = serverPlayer.murdered;
                 }
             });
             
@@ -1034,13 +1037,15 @@ function manualEliminatePlayer() {
     updateGameScreen();
     checkGameOver();
 
-    // Start murder timer (10 minutes from elimination)
-    const murderEnabledAt = Date.now() + 10 * 60 * 1000;
-    broadcastToAll({
-        type: 'murderTimerStarted',
-        murderEnabledAt: murderEnabledAt
-    });
-    startMurderTimer(murderEnabledAt);
+    // Start murder timer only if game is still going
+    if (gameState.phase !== 'gameOver') {
+        const murderEnabledAt = Date.now() + 10 * 60 * 1000;
+        broadcastToAll({
+            type: 'murderTimerStarted',
+            murderEnabledAt: murderEnabledAt
+        });
+        startMurderTimer(murderEnabledAt);
+    }
 }
 
 function cancelDeliberation() {
@@ -1062,6 +1067,9 @@ function cancelDeliberation() {
 }
 
 function startMurderTimer(murderEnabledAt) {
+    // Don't start timer if game is already over
+    if (gameState.phase === 'gameOver') return;
+
     // Clear any existing murder timer
     if (murderTimerId) {
         clearTimeout(murderTimerId);
@@ -1262,9 +1270,10 @@ function revealMurder() {
     const murdered = gameState.players.find(p => p.id === murderedId);
     
     if (!murdered) return;
-    
+
     murdered.eliminated = true;
-    
+    murdered.murdered = true;
+
     // Play dramatic music on murder reveal
     playMusicOnEvent();
     
@@ -1335,12 +1344,20 @@ function showGameOver(winner) {
         winnerMessage.textContent = 'The traitors have taken control!';
     }
     
-    finalRolesList.innerHTML = gameState.players.map(p => `
-        <div class="role-item ${p.role}">
-            <span>${p.isBot ? '🤖 ' : ''}${p.name}</span>
-            <span class="role-badge ${p.role}">${p.role.toUpperCase()}</span>
-        </div>
-    `).join('');
+    finalRolesList.innerHTML = gameState.players.map(p => {
+        let statusIcon = '';
+        if (p.murdered) {
+            statusIcon = ' 🗡️';
+        } else if (p.eliminated) {
+            statusIcon = ' ❌';
+        }
+        return `
+            <div class="role-item ${p.role}">
+                <span>${p.isBot ? '🤖 ' : ''}${p.name}${statusIcon}</span>
+                <span class="role-badge ${p.role}">${p.role.toUpperCase()}</span>
+            </div>
+        `;
+    }).join('');
     
     showScreen('gameOverScreen');
 }
