@@ -1245,10 +1245,11 @@ function scheduleBotMurderVotes() {
 function updateMurderVoteScreen() {
     const murderTargets = document.getElementById('murderTargets');
     const aliveAgents = gameState.players.filter(p => !p.eliminated && p.role === 'agent');
-    
+
     murderTargets.innerHTML = aliveAgents.map(p => `
         <button class="vote-button agent-target" data-player-id="${p.id}">
-            ${p.name}
+            <span class="murder-target-name">${p.name}</span>
+            <span class="murder-daggers" data-target-id="${p.id}"></span>
         </button>
     `).join('');
     
@@ -1301,6 +1302,17 @@ function updateMurderVoteStatus() {
         <p>Traitor Votes: ${votedCount} / ${aliveTraitors.length}</p>
         ${voteDetails}
     `;
+
+    // Update dagger indicators on each agent's vote button
+    const targetVoteCounts = {};
+    Object.values(gameState.murderVotes).forEach(targetId => {
+        targetVoteCounts[targetId] = (targetVoteCounts[targetId] || 0) + 1;
+    });
+    document.querySelectorAll('.murder-daggers').forEach(el => {
+        const targetId = el.dataset.targetId;
+        const count = targetVoteCounts[targetId] || 0;
+        el.textContent = '🗡️'.repeat(count);
+    });
 
     if (votedCount === aliveTraitors.length) {
         // Host auto-reveals the murder after a short delay

@@ -513,6 +513,18 @@ h3 {
     background: rgba(220, 38, 38, 0.2);
 }
 
+.vote-button .murder-target-name {
+    display: block;
+}
+
+.vote-button .murder-daggers {
+    display: block;
+    font-size: 1.1em;
+    margin-top: 2px;
+    letter-spacing: 2px;
+    min-height: 1.2em;
+}
+
 .vote-status {
     margin: var(--spacing-lg) 0;
     padding: var(--spacing-md);
