@@ -810,28 +810,41 @@ function callDeliberation() {
 function showDeliberationScreen() {
     const votingPlayers = document.getElementById('votingPlayers');
     const alivePlayers = gameState.players.filter(p => !p.eliminated);
-    
+    const meEliminated = gameState.players.find(p => p.id === gameState.playerId)?.eliminated;
+
     votingPlayers.innerHTML = alivePlayers.map(p => `
-        <button class="vote-button" data-player-id="${p.id}">
+        <button class="vote-button" data-player-id="${p.id}" ${meEliminated ? 'disabled' : ''}>
             ${p.name}${p.id === gameState.playerId ? ' (You)' : ''}
         </button>
     `).join('');
-    
+
+    if (meEliminated) {
+        votingPlayers.insertAdjacentHTML('beforeend',
+            '<p style="color: #ff6b6b; margin-top: 10px;">You have been eliminated and cannot vote.</p>');
+    }
+
     // Add click listeners
     votingPlayers.querySelectorAll('.vote-button').forEach(btn => {
         btn.addEventListener('click', () => voteForPlayer(btn.dataset.playerId));
     });
-    
+
     // Show host actions if host
     if (gameState.isHost) {
         document.getElementById('hostDeliberationActions').classList.remove('hidden');
     }
-    
+
     updateVoteStatus();
     showScreen('deliberationScreen');
 }
 
 function voteForPlayer(targetId) {
+    // Eliminated players cannot vote
+    const myPlayer = gameState.players.find(p => p.id === gameState.playerId);
+    if (myPlayer && myPlayer.eliminated) {
+        showNotification('You have been eliminated and cannot vote!', 'error');
+        return;
+    }
+
     if (targetId === gameState.playerId) {
         showNotification('You cannot vote for yourself!', 'error');
         return;
@@ -963,13 +976,15 @@ function eliminatePlayer() {
     updateGameScreen();
     checkGameOver();
 
-    // Start murder timer (10 minutes from elimination)
-    const murderEnabledAt = Date.now() + 10 * 60 * 1000;
-    broadcastToAll({
-        type: 'murderTimerStarted',
-        murderEnabledAt: murderEnabledAt
-    });
-    startMurderTimer(murderEnabledAt);
+    // Start murder timer only if game is still going
+    if (gameState.phase !== 'gameOver') {
+        const murderEnabledAt = Date.now() + 10 * 60 * 1000;
+        broadcastToAll({
+            type: 'murderTimerStarted',
+            murderEnabledAt: murderEnabledAt
+        });
+        startMurderTimer(murderEnabledAt);
+    }
 }
 
 function manualEliminatePlayer() {
