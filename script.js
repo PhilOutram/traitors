@@ -870,22 +870,26 @@ function showEliminationReveal(playerName, role) {
 function continueAfterElimination() {
     showScreen('gameScreen');
     updateGameScreen();
-    checkGameOver(true);
 
-    // Start murder timer only if game is still going (host triggers for everyone)
-    if (gameState.isHost && gameState.phase !== 'gameOver') {
-        // 30 second delay before traitors can murder (10s if all traitors are bots)
-        const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
-        const allTraitorsAreBots = aliveTraitors.length > 0 && aliveTraitors.every(p => p.isBot);
-        const delay = allTraitorsAreBots ? 5 * 1000 : 30 * 1000;
+    if (gameState.isHost) {
+        // Host determines game over and starts murder timer
+        checkGameOver(true);
 
-        const murderEnabledAt = Date.now() + delay;
-        broadcastToAll({
-            type: 'murderTimerStarted',
-            murderEnabledAt: murderEnabledAt
-        });
-        startMurderTimer(murderEnabledAt);
+        if (gameState.phase !== 'gameOver') {
+            // 30 second delay before traitors can murder (10s if all traitors are bots)
+            const aliveTraitors = gameState.players.filter(p => !p.eliminated && p.role === 'traitor');
+            const allTraitorsAreBots = aliveTraitors.length > 0 && aliveTraitors.every(p => p.isBot);
+            const delay = allTraitorsAreBots ? 5 * 1000 : 30 * 1000;
+
+            const murderEnabledAt = Date.now() + delay;
+            broadcastToAll({
+                type: 'murderTimerStarted',
+                murderEnabledAt: murderEnabledAt
+            });
+            startMurderTimer(murderEnabledAt);
+        }
     }
+    // Non-hosts don't evaluate game over — they wait for the 'gameOver' broadcast from host
 }
 
 function showDeliberationScreen() {
