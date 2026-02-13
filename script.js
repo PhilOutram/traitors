@@ -215,6 +215,7 @@ function setupEventListeners() {
 // Game Flow Functions
 function hostGame() {
     gameState.isHost = true;
+    gameState.phase = 'lobby';
     gameState.gameCode = generateGameCode();
     gameState.players = [{
         id: gameState.playerId,
